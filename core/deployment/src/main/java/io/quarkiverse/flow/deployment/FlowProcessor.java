@@ -5,6 +5,7 @@ import static io.quarkiverse.flow.deployment.WorkflowNamingConverter.generateFlo
 import static io.quarkiverse.flow.deployment.WorkflowNamingConverter.namespaceToPackage;
 import static io.quarkus.arc.processor.DotNames.SINGLETON;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,6 +30,11 @@ import io.quarkiverse.flow.internal.WorkflowApplicationInitializer;
 import io.quarkiverse.flow.internal.WorkflowNameUtils;
 import io.quarkiverse.flow.internal.WorkflowRegistrarService;
 import io.quarkiverse.flow.metrics.MicrometerExecutionListener;
+import io.quarkiverse.flow.opentelemetry.CDIOTelEmittedEventDecorator;
+import io.quarkiverse.flow.opentelemetry.InstrumentationContextManager;
+import io.quarkiverse.flow.opentelemetry.OTelEmittedEventDecorator;
+import io.quarkiverse.flow.opentelemetry.OTelWorkflowExecutionListener;
+import io.quarkiverse.flow.opentelemetry.SpanBuilderFactory;
 import io.quarkiverse.flow.providers.CredentialsProviderSecretManager;
 import io.quarkiverse.flow.providers.FaultToleranceProvider;
 import io.quarkiverse.flow.providers.HttpClientProvider;
@@ -47,6 +53,8 @@ import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -54,6 +62,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Produce;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
@@ -64,6 +73,7 @@ import io.quarkus.runtime.metrics.MetricsFactory;
 import io.serverlessworkflow.impl.WorkflowApplication;
 import io.serverlessworkflow.impl.WorkflowDefinition;
 import io.serverlessworkflow.impl.WorkflowException;
+import io.serverlessworkflow.impl.events.EmittedEventDecorator;
 import io.serverlessworkflow.impl.events.EventConsumer;
 import io.serverlessworkflow.impl.events.EventPublisher;
 import io.serverlessworkflow.impl.lifecycle.WorkflowExecutionCompletableListener;
@@ -183,6 +193,25 @@ class FlowProcessor {
                 .addBeanClass(StructuredLoggingListener.class)
                 .setUnremovable()
                 .build();
+    }
+
+    @BuildStep
+    void configureOpenTelemetry(Capabilities capabilities,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<GeneratedResourceBuildItem> generatedResources) {
+        if (capabilities.isPresent(Capability.OPENTELEMETRY_TRACER)) {
+            additionalBeans.produce(AdditionalBeanBuildItem.builder()
+                    .addBeanClass(SpanBuilderFactory.class)
+                    .addBeanClass(InstrumentationContextManager.class)
+                    .addBeanClass(OTelWorkflowExecutionListener.class)
+                    .addBeanClass(CDIOTelEmittedEventDecorator.class)
+                    .setDefaultScope(SINGLETON)
+                    .setUnremovable()
+                    .build());
+            generatedResources
+                    .produce(new GeneratedResourceBuildItem("META-INF/services/" + EmittedEventDecorator.class.getName(),
+                            OTelEmittedEventDecorator.class.getName().getBytes(StandardCharsets.UTF_8)));
+        }
     }
 
     @BuildStep
@@ -310,18 +339,20 @@ class FlowProcessor {
     @BuildStep
     void registerWorkflowApp(WorkflowApplicationRecorder recorder,
             ShutdownContextBuildItem shutdown,
+            Capabilities capabilities,
             Optional<MetricsCapabilityBuildItem> metricsCapability,
             BuildProducer<SyntheticBeanBuildItem> beans) {
 
         boolean isMicrometerSupported = metricsCapability
                 .map(capability -> capability.metricsSupported(MetricsFactory.MICROMETER)).orElse(false);
+        boolean isOtelSupported = capabilities.isPresent(Capability.OPENTELEMETRY_TRACER);
 
         beans.produce(SyntheticBeanBuildItem.configure(WorkflowApplication.class)
                 .scope(ApplicationScoped.class)
                 .unremovable()
                 .setRuntimeInit()
                 .addInjectionPoint(ClassType.create(DotName.createSimple(WorkflowApplicationCreator.class)))
-                .createWith(recorder.workflowAppCreator(shutdown, isMicrometerSupported))
+                .createWith(recorder.workflowAppCreator(shutdown, isMicrometerSupported, isOtelSupported))
                 .done());
         LOG.info("Flow: Registering Workflow Application bean: {}", WorkflowApplication.class.getName());
     }

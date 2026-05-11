@@ -11,10 +11,11 @@ import io.serverlessworkflow.impl.WorkflowApplication;
 public class WorkflowApplicationRecorder {
 
     public Function<SyntheticCreationalContext<WorkflowApplication>, WorkflowApplication> workflowAppCreator(
-            ShutdownContext shutdownContext, boolean isMicrometerSupported) {
+            ShutdownContext shutdownContext, boolean isMicrometerSupported, boolean isOtelSupported) {
         return context -> {
             WorkflowApplicationCreator creator = context.getInjectedReference(WorkflowApplicationCreator.class);
-            WorkflowApplication app = creator.create(isMicrometerSupported);
+            WorkflowApplication app = creator
+                    .create(new WorkflowApplicationCreatorOptions(isMicrometerSupported, isOtelSupported));
             shutdownContext.addShutdownTask(app::close);
             return app;
         };

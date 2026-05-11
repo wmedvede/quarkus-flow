@@ -4,6 +4,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import io.quarkiverse.flow.recorders.WorkflowApplicationCreator;
+import io.quarkiverse.flow.recorders.WorkflowApplicationCreatorOptions;
 import io.serverlessworkflow.impl.WorkflowApplication;
 
 /**
@@ -38,6 +39,6 @@ public class RuntimeWorkflowApplicationProvider {
      */
     public WorkflowApplication getRuntimeApplication() {
         // Create a NEW instance each time to ensure isolation between workflows
-        return creator.create(false);
+        return creator.create(new WorkflowApplicationCreatorOptions());
     }
 }

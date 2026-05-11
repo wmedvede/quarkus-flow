@@ -16,9 +16,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.quarkiverse.flow.config.FlowMetricsConfig;
+import io.quarkiverse.flow.config.FlowOTelConfig;
 import io.quarkiverse.flow.config.FlowTracingConfig;
 import io.quarkiverse.flow.internal.NoOpScheduler;
 import io.quarkiverse.flow.metrics.MicrometerExecutionListener;
+import io.quarkiverse.flow.opentelemetry.OTelWorkflowExecutionListener;
 import io.quarkiverse.flow.providers.CredentialsProviderSecretManager;
 import io.quarkiverse.flow.providers.FaultToleranceProvider;
 import io.quarkiverse.flow.providers.HttpClientProvider;
@@ -92,6 +94,9 @@ public class WorkflowApplicationCreator {
     Instance<MicrometerExecutionListener> micrometerListeners;
 
     @Inject
+    Instance<OTelWorkflowExecutionListener> otelListeners;
+
+    @Inject
     @Any
     Instance<WorkflowApplicationBuilderCustomizer> customizers;
 
@@ -107,15 +112,24 @@ public class WorkflowApplicationCreator {
     @Inject
     FlowMetricsConfig metricsConfig;
 
-    public WorkflowApplication create(boolean isMicrometerSupported) {
+    @Inject
+    FlowOTelConfig otelBuildConfig;
+
+    public WorkflowApplication create(WorkflowApplicationCreatorOptions options) {
         final Builder builder = WorkflowApplication.builder();
         if (tracingConfig.enabled().orElse(launchMode.isDevOrTest())) {
             LOG.debug("Flow: Tracing enabled");
             builder.withListener(new TraceLoggerExecutionListener());
         }
-        if (metricsConfig.enabled() && !isMicrometerSupported) {
+        if (metricsConfig.enabled() && !options.isMicrometerSupported()) {
             LOG.warn("Quarkus Flow metrics enabled but Micrometer not available. " +
                     "Add 'quarkus-micrometer-registry-prometheus' dependency to enable metrics.");
+        }
+
+        if (otelBuildConfig.enabled().isPresent() && otelBuildConfig.isEnabled() && !options.isOtelSupported()) {
+            LOG.warn("Quarkus Flow open telemetry is enabled but required extension is not available or not" +
+                    " correctly configured. Add the 'quarkus-opentelemetry' dependency to enable it and be sure that" +
+                    " the 'quarkus.otel.traces.enabled' property if set to true.");
         }
 
         builder.withContextFactory(new JavaModelFactory()).withModelFactory(new JacksonModelFactory());
@@ -130,7 +144,8 @@ public class WorkflowApplicationCreator {
         injectConfigManager(builder);
         injectHttpClientProvider(builder);
         injectMicrometerListener(builder);
-        injectFaultTolerance(builder, isMicrometerSupported);
+        injectFaultTolerance(builder, options);
+        injectOtelListener(builder, options);
         injectCustomListeners(builder);
 
         customizers.stream().forEachOrdered(customizer -> customizer.customize(builder));
@@ -150,7 +165,8 @@ public class WorkflowApplicationCreator {
     private void injectCustomListeners(Builder builder) {
         final Set<Class<?>> internalListeners = Set.of(
                 TraceLoggerExecutionListener.class,
-                MicrometerExecutionListener.class);
+                MicrometerExecutionListener.class,
+                OTelWorkflowExecutionListener.class);
 
         executionListeners.stream()
                 .filter(listener -> !internalListeners.contains(listener.getClass()))
@@ -247,11 +263,18 @@ public class WorkflowApplicationCreator {
         }
     }
 
+    private void injectOtelListener(Builder builder, WorkflowApplicationCreatorOptions options) {
+        if (options.isOtelSupported() && otelBuildConfig.isEnabled() && otelListeners.isResolvable()) {
+            builder.withListener(otelListeners.get());
+        } else {
+        }
+    }
+
     private void injectJQExpressionFactory(Builder builder) {
         builder.withExpressionFactory(new JQExpressionFactory(jqScopeSupplier));
     }
 
-    private void injectFaultTolerance(Builder builder, boolean isMicrometerSupported) {
+    private void injectFaultTolerance(Builder builder, WorkflowApplicationCreatorOptions options) {
         LOG.debug("Flow: Bound FaultToleranceProvider bean: {}", faultToleranceProvider.getClass().getName());
         builder.withCallableProxy(new CallableTaskProxyBuilder() {
             @Override
@@ -260,7 +283,7 @@ public class WorkflowApplicationCreator {
                     String workflowName = workflowContext.definition().workflow().getDocument().getName();
                     String taskName = taskContext.taskName();
                     TypedGuard<CompletionStage<WorkflowModel>> guard = faultToleranceProvider
-                            .guardFor(new WorkflowTaskContext(workflowName, taskName, isMicrometerSupported));
+                            .guardFor(new WorkflowTaskContext(workflowName, taskName, options.isMicrometerSupported()));
 
                     return guard.get(() -> delegate.apply(workflowContext, taskContext, input)).toCompletableFuture();
                 };
