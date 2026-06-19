@@ -28,6 +28,9 @@ import io.quarkiverse.flow.config.FlowDefinitionsConfig;
 import io.quarkiverse.flow.internal.WorkflowApplicationInitializer;
 import io.quarkiverse.flow.internal.WorkflowNameUtils;
 import io.quarkiverse.flow.metrics.MicrometerExecutionListener;
+import io.quarkiverse.flow.opentelemetry.InstrumentationContextManager;
+import io.quarkiverse.flow.opentelemetry.OtelWorkflowExecutionListener;
+import io.quarkiverse.flow.opentelemetry.SpanBuilderFactory;
 import io.quarkiverse.flow.providers.CredentialsProviderSecretManager;
 import io.quarkiverse.flow.providers.FaultToleranceProvider;
 import io.quarkiverse.flow.providers.HttpClientProvider;
@@ -46,6 +49,8 @@ import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -183,6 +188,21 @@ class FlowProcessor {
                 .addBeanClass(StructuredLoggingListener.class)
                 .setUnremovable()
                 .build();
+    }
+
+    @BuildStep
+    void configureOpenTelemetry(Capabilities capabilities,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+        if (capabilities.isPresent(Capability.OPENTELEMETRY_TRACER)) {
+            System.out.println("XXXXXXXXXXXXXXXXXXXXX PRODUCING OpenTelemetryIntegration");
+            additionalBeans.produce(AdditionalBeanBuildItem.builder()
+                    .addBeanClass(SpanBuilderFactory.class)
+                    .addBeanClass(InstrumentationContextManager.class)
+                    .addBeanClasses(OtelWorkflowExecutionListener.class)
+                    .setDefaultScope(SINGLETON)
+                    .setUnremovable()
+                    .build());
+        }
     }
 
     @BuildStep

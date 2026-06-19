@@ -117,6 +117,12 @@
             <artifactId>java-semver</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Unit Tests Dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
