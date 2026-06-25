@@ -1,6 +1,9 @@
 package io.quarkiverse.flow.opentelemetry;
 
-import static io.quarkiverse.flow.opentelemetry.EventUtil.shortEventName;
+import static io.quarkiverse.flow.opentelemetry.SpanUtils.appendTaskEvent;
+import static io.quarkiverse.flow.opentelemetry.SpanUtils.appendWorkflowEvent;
+import static io.quarkiverse.flow.opentelemetry.SpanUtils.generateTaskSpanName;
+import static io.quarkiverse.flow.opentelemetry.SpanUtils.generateWorkflowSpanName;
 import static io.quarkiverse.flow.opentelemetry.TaskEventType.TASK_CANCELLED;
 import static io.quarkiverse.flow.opentelemetry.TaskEventType.TASK_COMPLETED;
 import static io.quarkiverse.flow.opentelemetry.TaskEventType.TASK_RESUMED;
@@ -41,15 +44,10 @@ import io.serverlessworkflow.impl.lifecycle.WorkflowSuspendedEvent;
 
 public class OtelWorkflowExecutionListener implements WorkflowExecutionListener {
 
-    public enum SpanNameGenerationMode {
-        TASK_TYPE_AND_NAME,
-        TASK_ID_AND_NAME
-    }
-
     private static final Logger LOGGER = LoggerFactory.getLogger(OtelWorkflowExecutionListener.class);
 
-    @ConfigProperty(name = "quarkus.flow.span-wfName-generation-mode", defaultValue = "TASK_TYPE_AND_NAME")
-    SpanNameGenerationMode spanNameGenerationMode;
+    @ConfigProperty(name = "quarkus.flow.otel.task.span-name-mode", defaultValue = "TASK_TYPE_AND_NAME")
+    SpanUtils.SpanNameGenerationMode spanNameGenerationMode;
 
     @Inject
     SpanBuilderFactory spanBuilderFactory;
@@ -61,11 +59,9 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
     public void onWorkflowStarted(WorkflowStartedEvent ev) {
         WorkflowEventInfo eventInfo = WorkflowEventInfo.from(ev);
 
-        LOGGER.debug("On " + eventInfo.eventType() + ": workflowApplicationId: " + eventInfo.wfApplicationId()
-                + ", workflowNamespace: "
-                + eventInfo.wfNamespace() + ", workflowName: " + eventInfo.wfName() + ", workflowInstanceId: "
-                + eventInfo.wfInstanceId()
-                + ", workflowVersion: " + eventInfo.wfVersion());
+        LOGGER.debug("On - " + eventInfo.eventType() + ": workflowApplicationId: " + eventInfo.wfApplicationId()
+                + ", workflowNamespace: " + eventInfo.wfNamespace() + ", workflowName: " + eventInfo.wfName()
+                + ", workflowInstanceId: " + eventInfo.wfInstanceId() + ", workflowVersion: " + eventInfo.wfVersion());
 
         Context parentContext = Context.current();
         String workflowSpanName = generateWorkflowSpanName(eventInfo.wfName());
@@ -76,13 +72,14 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 eventInfo.wfName(),
                 eventInfo.wfInstanceId(),
                 eventInfo.wfVersion(),
+                // TODO
                 // The start process span is always a child of the ongoing context.
                 // What happens when:
                 // 1) We execute the blocking creation
                 // 2) We execute the fire and forget creation
                 // 3) We execute the scheduled driven creation (every, cron, after, on)
                 parentContext).startSpan();
-        appendWorkflowEvent(startSpan, ev);
+        appendWorkflowEvent(startSpan, eventInfo.eventType());
 
         InstrumentationContext workflowContext = InstrumentationContext.newBuilder()
                 .parentContext(parentContext)
@@ -121,29 +118,26 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
     private void doWorkflowEvent(WorkflowEvent ev) {
         WorkflowEventInfo eventInfo = WorkflowEventInfo.from(ev);
 
-        LOGGER.debug("On" + eventInfo.eventType() + ": workflowApplicationId: " + eventInfo.wfApplicationId()
-                + ", workflowNamespace: "
-                + eventInfo.wfNamespace() + "workflowName: " + eventInfo.wfName() + ", workflowInstanceId: "
-                + eventInfo.wfInstanceId() + ", workflowVersion: "
-                + eventInfo.wfVersion());
+        LOGGER.debug("On - " + eventInfo.eventType() + ": workflowApplicationId: " + eventInfo.wfApplicationId()
+                + ", workflowNamespace: " + eventInfo.wfNamespace() + "workflowName: " + eventInfo.wfName()
+                + ", workflowInstanceId: " + eventInfo.wfInstanceId() + ", workflowVersion: " + eventInfo.wfVersion());
 
         InstrumentationContext workflowContext = contextManager.getWorkflowInstanceContext(eventInfo.wfInstanceId());
         if (workflowContext == null) {
-            LOGGER.warn("On" + eventInfo.eventType() + ": no instrumentation context was found for  workflowApplicationId: "
+            LOGGER.warn("On - " + eventInfo.eventType() + ": no instrumentation context was found for workflowApplicationId: "
                     + eventInfo.wfApplicationId() + ", workflowNamespace: " + eventInfo.wfNamespace()
                     + "workflowName: " + eventInfo.wfName() + ", workflowInstanceId: " + eventInfo.wfInstanceId()
-                    + ", workflowVersion: "
-                    + eventInfo.wfVersion());
+                    + ", workflowVersion: " + eventInfo.wfVersion());
             return;
         }
 
         Span startSpan = workflowContext.getStartSpan();
         if (eventInfo.eventType() == WORKFLOW_SUSPENDED || eventInfo.eventType() == WORKFLOW_RESUMED) {
-            appendWorkflowEvent(workflowContext.getStartSpan(), ev);
+            appendWorkflowEvent(workflowContext.getStartSpan(), eventInfo.eventType());
         } else if (eventInfo.eventType() == WORKFLOW_COMPLETED || eventInfo.eventType() == WORKFLOW_CANCELLED) {
             startSpan.setStatus(StatusCode.OK);
             contextManager.ensureAllTaskSpansAreClosed(eventInfo.wfInstanceId());
-            appendWorkflowEvent(startSpan, ev);
+            appendWorkflowEvent(startSpan, eventInfo.eventType());
             startSpan.end();
             contextManager.removeWorkflowInstanceContext(eventInfo.wfInstanceId());
         } else {
@@ -151,7 +145,7 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
             startSpan.recordException(failedEvent.cause());
             startSpan.setStatus(StatusCode.ERROR, failedEvent.cause().getMessage());
             contextManager.ensureAllTaskSpansAreClosed(eventInfo.wfInstanceId());
-            appendWorkflowEvent(startSpan, ev);
+            appendWorkflowEvent(startSpan, eventInfo.eventType());
             startSpan.end();
             contextManager.removeWorkflowInstanceContext(eventInfo.wfInstanceId());
         }
@@ -170,7 +164,8 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
     private void doTaskStartedOrRetried(TaskEvent ev) {
         TaskEventInfo eventInfo = TaskEventInfo.from(ev);
 
-        LOGGER.debug("On" + eventInfo.eventType() + " taskType: " + eventInfo.taskType() + ", taskName: " + eventInfo.taskName()
+        LOGGER.debug("On - " + eventInfo.eventType() + " taskType: " + eventInfo.taskType() + ", taskName: "
+                + eventInfo.taskName()
                 + ", taskId: " + eventInfo.taskId()
                 + ", iteration: " + eventInfo.taskInstanceIteration() + ", isRetrying: " + eventInfo.taskInstanceRetrying()
                 + ", retryAttempt: "
@@ -189,7 +184,7 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 eventInfo.wfName(),
                 eventInfo.wfInstanceId(),
                 eventInfo.wfVersion(),
-                eventInfo.wfInstanceId(),
+                eventInfo.taskId(),
                 eventInfo.taskType().name(),
                 eventInfo.taskName(),
                 eventInfo.taskInstanceIteration(),
@@ -198,11 +193,12 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 parentContext)
                 .startSpan();
 
-        appendTaskEvent(startSpan, ev);
+        appendTaskEvent(startSpan, eventInfo.eventType());
 
         InstrumentationContext taskInstanceContext = InstrumentationContext.newBuilder()
                 .withJsonPosition(eventInfo.taskId())
                 .withTaskType(eventInfo.taskType())
+                .withContainerPosition(containerContextPosition(eventInfo.taskType(), eventInfo.taskId()))
                 .withStartSpan(startSpan)
                 .withStartTime(Instant.now())
                 .parentContext(parentContext)
@@ -224,7 +220,8 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
     private void doTaskEvent(TaskEvent ev) {
         TaskEventInfo eventInfo = TaskEventInfo.from(ev);
 
-        LOGGER.debug("On" + eventInfo.eventType() + " taskType: " + eventInfo.taskType() + ", taskName: " + eventInfo.taskName()
+        LOGGER.debug("On - " + eventInfo.eventType() + " taskType: " + eventInfo.taskType() + ", taskName: "
+                + eventInfo.taskName()
                 + ", taskId: " + eventInfo.taskId()
                 + ", iteration: " + eventInfo.taskInstanceIteration() + ", isRetrying: " + eventInfo.taskInstanceRetrying()
                 + ", retryAttempt: "
@@ -235,31 +232,30 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 eventInfo.taskInstanceIteration(), eventInfo.taskInstanceRetryAttempt());
         if (taskInstanceContext == null) {
             LOGGER.warn("No taskInstanceContext was found for taskType: " + eventInfo.taskType() + ", taskName: "
-                    + eventInfo.taskName() + " taskId: "
-                    + eventInfo.taskId() + " iteration: " + eventInfo.taskInstanceIteration() + " isRetrying: "
-                    + eventInfo.taskInstanceRetrying()
+                    + eventInfo.taskName() + " taskId: " + eventInfo.taskId()
+                    + " iteration: " + eventInfo.taskInstanceIteration() + " isRetrying: " + eventInfo.taskInstanceRetrying()
                     + " retryAttempt: " + eventInfo.taskInstanceRetryAttempt());
             return;
         }
 
         if (TASK_CANCELLED == eventInfo.eventType() || TASK_COMPLETED == eventInfo.eventType()) {
             Span startSpan = taskInstanceContext.getStartSpan();
-            appendTaskEvent(startSpan, ev);
+            appendTaskEvent(startSpan, eventInfo.eventType());
             startSpan.setStatus(StatusCode.OK);
-            taskInstanceContext.getStartSpan().end();
+            startSpan.end();
             contextManager.removeTaskInstanceInstanceContext(eventInfo.wfInstanceId(), eventInfo.taskId(),
                     eventInfo.taskInstanceIteration(),
                     eventInfo.taskInstanceRetryAttempt());
         } else if (TASK_SUSPENDED == eventInfo.eventType() || TASK_RESUMED == eventInfo.eventType()) {
             Span startSpan = taskInstanceContext.getStartSpan();
-            appendTaskEvent(startSpan, ev);
+            appendTaskEvent(startSpan, eventInfo.eventType());
         } else {
             Span startSpan = taskInstanceContext.getStartSpan();
             TaskFailedEvent failedEvent = (TaskFailedEvent) ev;
-            appendTaskEvent(startSpan, ev);
+            appendTaskEvent(startSpan, eventInfo.eventType());
             startSpan.recordException(failedEvent.cause());
             startSpan.setStatus(StatusCode.ERROR, failedEvent.cause().getMessage());
-            taskInstanceContext.getStartSpan().end();
+            startSpan.end();
             contextManager.removeTaskInstanceInstanceContext(eventInfo.wfInstanceId(), eventInfo.taskId(),
                     eventInfo.taskInstanceIteration(),
                     eventInfo.taskInstanceRetryAttempt());
@@ -291,34 +287,28 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
         doTaskEvent(ev);
     }
 
-    private static void appendWorkflowEvent(Span span, WorkflowEvent ev) {
-        span.addEvent(shortEventName(ev));
-    }
-
-    private static void appendTaskEvent(Span span, TaskEvent ev) {
-        span.addEvent(shortEventName(ev));
-    }
-
-    private static String generateTaskSpanName(
-            SpanNameGenerationMode generationMode,
-            String taskInstanceId,
-            TaskType taskType,
-            String taskName,
-            int taskInstanceIteration, short retryAttempt) {
-        if (generationMode == SpanNameGenerationMode.TASK_TYPE_AND_NAME) {
-            return taskType + ": " + taskName + " iteration: " + taskInstanceIteration + ", retry: " + retryAttempt;
-        }
-        return taskInstanceId + "-" + " (" + taskName + ") # " + taskInstanceIteration + "(retry: " + retryAttempt + ")";
-    }
-
-    private static String generateWorkflowSpanName(
-            String workflowName) {
-        return "WORKFLOW (" + workflowName + ")";
-    }
-
     @Override
     public void close() {
         WorkflowExecutionListener.super.close();
     }
 
+    private static String containerContextPosition(TaskType taskType, String jsonPosition) {
+        switch (taskType) {
+            case DO:
+            case FOR:
+            case LISTEN:
+                // do/.../doTask/do
+                // do/.../forTask/do
+                // do/.../listenTask/do
+                return jsonPosition.substring(0, jsonPosition.length() - 3);
+            case TRY:
+                // do/.../tryTask/try
+                return jsonPosition.substring(0, jsonPosition.length() - 4);
+            case FORK:
+                // do/.../forkTask/branch
+                return jsonPosition.substring(0, jsonPosition.length() - 7);
+            default:
+                return null;
+        }
+    }
 }

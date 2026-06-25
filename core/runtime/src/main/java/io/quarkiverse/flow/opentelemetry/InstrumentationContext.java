@@ -15,6 +15,8 @@ public class InstrumentationContext {
 
     private final String jsonPosition;
 
+    private final String containerPosition;
+
     private final TaskType taskType;
 
     private final Context parentContext;
@@ -28,12 +30,14 @@ public class InstrumentationContext {
             boolean retrying,
             short retryAttempt,
             TaskType taskType,
+            String containerPosition,
             Context parentContext, Span startSpan, Instant startTime) {
         this.jsonPosition = jsonPosition;
         this.iteration = iteration;
         this.retrying = retrying;
         this.retryAttempt = retryAttempt;
         this.taskType = taskType;
+        this.containerPosition = containerPosition;
         this.parentContext = parentContext;
         this.startSpan = startSpan;
         this.startTime = startTime;
@@ -57,6 +61,14 @@ public class InstrumentationContext {
 
     public TaskType getTaskType() {
         return taskType;
+    }
+
+    public boolean isContainerContext() {
+        return containerPosition != null;
+    }
+
+    public String getContainerPosition() {
+        return containerPosition;
     }
 
     public Context getParentContext() {
@@ -86,6 +98,8 @@ public class InstrumentationContext {
         private short retryAttempt;
 
         private TaskType taskType;
+
+        private String containerPosition;
 
         private Span startSpan;
 
@@ -122,6 +136,11 @@ public class InstrumentationContext {
             return this;
         }
 
+        public Builder withContainerPosition(String containerPosition) {
+            this.containerPosition = containerPosition;
+            return this;
+        }
+
         public Builder withStartSpan(Span startSpan) {
             this.startSpan = startSpan;
             return this;
@@ -139,7 +158,7 @@ public class InstrumentationContext {
 
         public InstrumentationContext build() {
             return new InstrumentationContext(jsonPosition, iteration, retrying, retryAttempt,
-                    taskType, parentContext, startSpan, startTime);
+                    taskType, containerPosition, parentContext, startSpan, startTime);
         }
     }
 }

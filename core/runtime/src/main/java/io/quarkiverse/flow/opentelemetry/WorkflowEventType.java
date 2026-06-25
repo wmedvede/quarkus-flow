@@ -2,6 +2,7 @@ package io.quarkiverse.flow.opentelemetry;
 
 import java.util.NoSuchElementException;
 
+import io.serverlessworkflow.impl.LifecycleEvents;
 import io.serverlessworkflow.impl.lifecycle.WorkflowCancelledEvent;
 import io.serverlessworkflow.impl.lifecycle.WorkflowCompletedEvent;
 import io.serverlessworkflow.impl.lifecycle.WorkflowEvent;
@@ -11,14 +12,24 @@ import io.serverlessworkflow.impl.lifecycle.WorkflowStartedEvent;
 import io.serverlessworkflow.impl.lifecycle.WorkflowSuspendedEvent;
 
 public enum WorkflowEventType {
-    WORKFLOW_STARTED,
-    WORKFLOW_SUSPENDED,
-    WORKFLOW_RESUMED,
-    WORKFLOW_COMPLETED,
-    WORKFLOW_CANCELLED,
-    WORKFLOW_FAILED;
+    WORKFLOW_STARTED(LifecycleEvents.WORKFLOW_STARTED),
+    WORKFLOW_SUSPENDED(LifecycleEvents.WORKFLOW_SUSPENDED),
+    WORKFLOW_RESUMED(LifecycleEvents.WORKFLOW_RESUMED),
+    WORKFLOW_COMPLETED(LifecycleEvents.WORKFLOW_COMPLETED),
+    WORKFLOW_CANCELLED(LifecycleEvents.WORKFLOW_CANCELLED),
+    WORKFLOW_FAILED(LifecycleEvents.WORKFLOW_FAULTED);
 
-    static WorkflowEventType fromEvent(WorkflowEvent event) {
+    private final String id;
+
+    WorkflowEventType(String id) {
+        this.id = id;
+    }
+
+    public String id() {
+        return id;
+    }
+
+    public static WorkflowEventType fromEvent(WorkflowEvent event) {
         if (event instanceof WorkflowStartedEvent) {
             return WORKFLOW_STARTED;
         }

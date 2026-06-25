@@ -48,32 +48,16 @@ public class InstrumentationContextManager {
         return workflowInstanceTaskContext.get(workflowInstanceId).get(taskContextId(taskInstanceId, iteration, retryAttempt));
     }
 
-    public InstrumentationContext findParentContext(String workflowInstanceId, String jsonPosition) {
-        Map<String, InstrumentationContext> currentWorkflowInstanceTaskSpanContext = workflowInstanceTaskContext
+    private String findParentContextId(String workflowInstanceId, String jsonPosition) {
+        Map<String, InstrumentationContext> currentWorkflowInstanceTaskContext = workflowInstanceTaskContext
                 .get(workflowInstanceId);
         InstrumentationContext parentInstrumentationContext = null;
-        for (InstrumentationContext instrumentationContext : currentWorkflowInstanceTaskSpanContext.values()) {
-            if (jsonPosition.startsWith(instrumentationContext.getJsonPosition()) && (parentInstrumentationContext == null
-                    || instrumentationContext.getJsonPosition().length() > parentInstrumentationContext.getJsonPosition()
-                            .length())) {
-                parentInstrumentationContext = instrumentationContext;
-            }
-        }
-        if (parentInstrumentationContext != null) {
-            return parentInstrumentationContext;
-        }
-        return workflowInstanceContext.get(workflowInstanceId);
-    }
-
-    public String findParentContextId(String workflowInstanceId, String jsonPosition) {
-        Map<String, InstrumentationContext> currentWorkflowInstanceTaskSpanContext = workflowInstanceTaskContext
-                .get(workflowInstanceId);
-        InstrumentationContext parentInstrumentationContext = null;
-        for (InstrumentationContext instrumentationContext : currentWorkflowInstanceTaskSpanContext.values()) {
-            if (jsonPosition.startsWith(instrumentationContext.getJsonPosition())
+        for (InstrumentationContext instrumentationContext : currentWorkflowInstanceTaskContext.values()) {
+            if (instrumentationContext.isContainerContext()
+                    && jsonPosition.startsWith(instrumentationContext.getContainerPosition())
                     && !jsonPosition.equals(instrumentationContext.getJsonPosition()) && (parentInstrumentationContext == null
-                            || instrumentationContext.getJsonPosition().length() > parentInstrumentationContext
-                                    .getJsonPosition().length())) {
+                            || instrumentationContext.getContainerPosition().length() > parentInstrumentationContext
+                                    .getContainerPosition().length())) {
                 parentInstrumentationContext = instrumentationContext;
             }
         }
@@ -88,10 +72,10 @@ public class InstrumentationContextManager {
         if (parentContextId == null) {
             return workflowInstanceContext.get(workflowInstanceId);
         }
-        Map<String, InstrumentationContext> currentWorkflowInstanceTaskSpanContext = workflowInstanceTaskContext
+        Map<String, InstrumentationContext> currentWorkflowInstanceTaskContext = workflowInstanceTaskContext
                 .get(workflowInstanceId);
         InstrumentationContext parentInstrumentationContext = null;
-        for (InstrumentationContext instrumentationContext : currentWorkflowInstanceTaskSpanContext.values()) {
+        for (InstrumentationContext instrumentationContext : currentWorkflowInstanceTaskContext.values()) {
             if (parentContextId.equals(instrumentationContext.getJsonPosition())
                     && (parentInstrumentationContext == null
                             || instrumentationContext.getIteration() > parentInstrumentationContext.getIteration())) {

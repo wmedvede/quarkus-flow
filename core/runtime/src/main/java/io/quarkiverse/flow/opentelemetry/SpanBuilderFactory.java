@@ -11,13 +11,13 @@ public class SpanBuilderFactory {
 
     static final String FLOW_WF_APPLICATION_ID_ATTR = "flow.workflow.application.id";
     static final String FLOW_WF_ID_ATTR = "flow.workflow.id";
-    static final String FLOW_WF_NAME_ATTR = "flow.workflow.wfName";
-    static final String FLOW_WF_NAMESPACE_ATTR = "flow.workflow.wfNamespace";
+    static final String FLOW_WF_NAME_ATTR = "flow.workflow.name";
+    static final String FLOW_WF_NAMESPACE_ATTR = "flow.workflow.namespace";
     static final String FLOW_WF_VERSION_ATTR = "flow.workflow.version";
 
     static final String FLOW_TASK_ID_ATTR = "flow.task.id";
     static final String FLOW_TASK_TYPE_ATTR = "flow.task.type";
-    static final String FLOW_TASK_NAME_ATTR = "flow.task.wfName";
+    static final String FLOW_TASK_NAME_ATTR = "flow.task.name";
     static final String FLOW_TASK_ITERATION_ATTR = "flow.task.iteration";
     static final String FLOW_TASK_RETRYING_ATTR = "flow.task.retrying";
     static final String FLOW_TASK_RETRY_ATTEMPT = "flow.task.retry_attempt";
