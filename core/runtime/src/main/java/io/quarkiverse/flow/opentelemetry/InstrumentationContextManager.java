@@ -1,7 +1,6 @@
 package io.quarkiverse.flow.opentelemetry;
 
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,7 +24,7 @@ public class InstrumentationContextManager {
 
     public void putWorkflowInstanceContext(String workflowInstanceId, InstrumentationContext context) {
         workflowInstanceContext.put(workflowInstanceId, context);
-        workflowInstanceTaskContext.putIfAbsent(workflowInstanceId, new HashMap<>());
+        workflowInstanceTaskContext.putIfAbsent(workflowInstanceId, new ConcurrentHashMap<>());
     }
 
     public static String taskContextId(String taskInstanceId, int iteration, short retryAttempt) {
@@ -34,7 +33,7 @@ public class InstrumentationContextManager {
 
     public void putTaskInstanceInstanceContext(String workflowInstanceId, String taskInstanceId, int iteration,
             short retryAttempt, InstrumentationContext context) {
-        workflowInstanceTaskContext.putIfAbsent(workflowInstanceId, new HashMap<>())
+        workflowInstanceTaskContext.computeIfAbsent(workflowInstanceId, key -> new ConcurrentHashMap<>())
                 .put(taskContextId(taskInstanceId, iteration, retryAttempt), context);
     }
 

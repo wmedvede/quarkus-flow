@@ -297,15 +297,15 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
             case DO:
             case FOR:
             case LISTEN:
-                // do/.../doTask/do
-                // do/.../forTask/do
-                // do/.../listenTask/do
+                // do/0/doTask/do
+                // do/0/forTask/do
+                // do/0/listenTask/do
                 return jsonPosition.substring(0, jsonPosition.length() - 3);
             case TRY:
-                // do/.../tryTask/try
+                // do/0/tryTask/try
                 return jsonPosition.substring(0, jsonPosition.length() - 4);
             case FORK:
-                // do/.../forkTask/branch
+                // do/0/forkTask/branch
                 return jsonPosition.substring(0, jsonPosition.length() - 7);
             default:
                 return null;
