@@ -1,1 +1,2 @@
 io.quarkiverse.flow.providers.MetadataPropagationRequestDecorator
+io.quarkiverse.flow.opentelemetry.OtelHttpRequestDecorator

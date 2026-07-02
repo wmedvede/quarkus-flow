@@ -28,6 +28,7 @@ import io.quarkiverse.flow.config.FlowDefinitionsConfig;
 import io.quarkiverse.flow.internal.WorkflowApplicationInitializer;
 import io.quarkiverse.flow.internal.WorkflowNameUtils;
 import io.quarkiverse.flow.metrics.MicrometerExecutionListener;
+import io.quarkiverse.flow.opentelemetry.CDIOtelHttpRequestDecorator;
 import io.quarkiverse.flow.opentelemetry.InstrumentationContextManager;
 import io.quarkiverse.flow.opentelemetry.OtelWorkflowExecutionListener;
 import io.quarkiverse.flow.opentelemetry.SpanBuilderFactory;
@@ -198,7 +199,8 @@ class FlowProcessor {
             additionalBeans.produce(AdditionalBeanBuildItem.builder()
                     .addBeanClass(SpanBuilderFactory.class)
                     .addBeanClass(InstrumentationContextManager.class)
-                    .addBeanClasses(OtelWorkflowExecutionListener.class)
+                    .addBeanClass(OtelWorkflowExecutionListener.class)
+//                    .addBeanClass(CDIOtelHttpRequestDecorator.class)
                     .setDefaultScope(SINGLETON)
                     .setUnremovable()
                     .build());

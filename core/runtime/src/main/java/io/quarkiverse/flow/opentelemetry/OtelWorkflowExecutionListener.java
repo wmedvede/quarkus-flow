@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import io.serverlessworkflow.impl.TaskContext;
 import io.serverlessworkflow.impl.lifecycle.TaskCancelledEvent;
 import io.serverlessworkflow.impl.lifecycle.TaskCompletedEvent;
@@ -41,6 +42,9 @@ import io.serverlessworkflow.impl.lifecycle.WorkflowFailedEvent;
 import io.serverlessworkflow.impl.lifecycle.WorkflowResumedEvent;
 import io.serverlessworkflow.impl.lifecycle.WorkflowStartedEvent;
 import io.serverlessworkflow.impl.lifecycle.WorkflowSuspendedEvent;
+import io.vertx.core.Vertx;
+import io.vertx.core.impl.ContextInternal;
+import io.vertx.core.impl.VertxThread;
 
 public class OtelWorkflowExecutionListener implements WorkflowExecutionListener {
 
@@ -63,6 +67,8 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 + ", workflowNamespace: " + eventInfo.wfNamespace() + ", workflowName: " + eventInfo.wfName()
                 + ", workflowInstanceId: " + eventInfo.wfInstanceId() + ", workflowVersion: " + eventInfo.wfVersion());
 
+        printThreadAndCurrentVertxContext("On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName());
+
         Context parentContext = Context.current();
         String workflowSpanName = generateWorkflowSpanName(eventInfo.wfName());
 
@@ -72,12 +78,6 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 eventInfo.wfName(),
                 eventInfo.wfInstanceId(),
                 eventInfo.wfVersion(),
-                // TODO
-                // The start process span is always a child of the ongoing context.
-                // What happens when:
-                // 1) We execute the blocking creation
-                // 2) We execute the fire and forget creation
-                // 3) We execute the scheduled driven creation (every, cron, after, on)
                 parentContext).startSpan();
         appendWorkflowEvent(startSpan, eventInfo.eventType());
 
@@ -121,6 +121,8 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
         LOGGER.debug("On - " + eventInfo.eventType() + ": workflowApplicationId: " + eventInfo.wfApplicationId()
                 + ", workflowNamespace: " + eventInfo.wfNamespace() + "workflowName: " + eventInfo.wfName()
                 + ", workflowInstanceId: " + eventInfo.wfInstanceId() + ", workflowVersion: " + eventInfo.wfVersion());
+
+        printThreadAndCurrentVertxContext("On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName());
 
         InstrumentationContext workflowContext = contextManager.getWorkflowInstanceContext(eventInfo.wfInstanceId());
         if (workflowContext == null) {
@@ -171,6 +173,9 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 + ", retryAttempt: "
                 + eventInfo.taskInstanceRetryAttempt() + ", retryCount: " + eventInfo.taskInstanceRetryCount());
 
+        printThreadAndCurrentVertxContext(
+                "On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName() + ", taskId: " + eventInfo.taskId());
+
         InstrumentationContext parentTaskContext = contextManager.findEnclosingParentContext(eventInfo.wfInstanceId(),
                 eventInfo.taskId());
         Context parentContext = parentTaskContext.getStartSpan().storeInContext(parentTaskContext.getParentContext());
@@ -195,11 +200,32 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
 
         appendTaskEvent(startSpan, eventInfo.eventType());
 
+        boolean sdkInstrumentation = true;
+        boolean listenerInstrumentation = false;
+        Scope startSpanScope = null;
+        if (eventInfo.taskType() == TaskType.CALL) {
+            if (sdkInstrumentation) {
+                // To emulate the instrumentation of the work of the potential real work.
+                ((TaskContext) ev.taskContext()).variables().put("otel-task-span", startSpan);
+            }
+            if (listenerInstrumentation) {
+                startSpanScope = startSpan.makeCurrent();
+            }
+
+            //            ContextStorage contextStorage = ServiceLoader.load(ContextStorage.class).findFirst().orElseThrow();
+            //            startSpanScope = contextStorage.attach(parentContext);
+
+            //io.quarkus.opentelemetry.runtime.QuarkusContextStorage.INSTANCE.attach(currentContext);
+
+            //            startSpanScope = startSpan.makeCurrent();
+        }
+
         InstrumentationContext taskInstanceContext = InstrumentationContext.newBuilder()
                 .withJsonPosition(eventInfo.taskId())
                 .withTaskType(eventInfo.taskType())
                 .withContainerPosition(containerContextPosition(eventInfo.taskType(), eventInfo.taskId()))
                 .withStartSpan(startSpan)
+                .withStartSpanScope(startSpanScope)
                 .withStartTime(Instant.now())
                 .parentContext(parentContext)
                 .withIteration(eventInfo.taskInstanceIteration())
@@ -210,11 +236,6 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
         contextManager.putTaskInstanceInstanceContext(eventInfo.wfInstanceId(), eventInfo.taskId(),
                 eventInfo.taskInstanceIteration(),
                 eventInfo.taskInstanceRetryAttempt(), taskInstanceContext);
-
-        if (eventInfo.taskType() == TaskType.SET) {
-            // To emulate the instrumentation of the work of the potential real work.
-            ((TaskContext) ev.taskContext()).variables().put("otel-task-span", startSpan);
-        }
     }
 
     private void doTaskEvent(TaskEvent ev) {
@@ -226,6 +247,9 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
                 + ", iteration: " + eventInfo.taskInstanceIteration() + ", isRetrying: " + eventInfo.taskInstanceRetrying()
                 + ", retryAttempt: "
                 + eventInfo.taskInstanceRetryAttempt() + ", retryCount: " + eventInfo.taskInstanceRetryCount());
+
+        printThreadAndCurrentVertxContext(
+                "On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName() + ", taskId: " + eventInfo.taskId());
 
         InstrumentationContext taskInstanceContext = contextManager.getTaskInstanceContext(eventInfo.wfInstanceId(),
                 eventInfo.taskId(),
@@ -240,6 +264,9 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
 
         if (TASK_CANCELLED == eventInfo.eventType() || TASK_COMPLETED == eventInfo.eventType()) {
             Span startSpan = taskInstanceContext.getStartSpan();
+            if (taskInstanceContext.getStartSpanScope() != null) {
+                taskInstanceContext.getStartSpanScope().close();
+            }
             appendTaskEvent(startSpan, eventInfo.eventType());
             startSpan.setStatus(StatusCode.OK);
             startSpan.end();
@@ -251,6 +278,9 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
             appendTaskEvent(startSpan, eventInfo.eventType());
         } else {
             Span startSpan = taskInstanceContext.getStartSpan();
+            if (taskInstanceContext.getStartSpanScope() != null) {
+                taskInstanceContext.getStartSpanScope().close();
+            }
             TaskFailedEvent failedEvent = (TaskFailedEvent) ev;
             appendTaskEvent(startSpan, eventInfo.eventType());
             startSpan.recordException(failedEvent.cause());
@@ -310,5 +340,29 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
             default:
                 return null;
         }
+    }
+
+    public static void printThreadAndCurrentVertxContext(String prefix) {
+        Thread currentThread = Thread.currentThread();
+        Boolean isVertxThread = null;
+        Boolean isVertxWorker = null;
+
+        if (currentThread instanceof VertxThread) {
+            isVertxThread = true;
+            isVertxWorker = ((VertxThread) currentThread).isWorker();
+        }
+
+        io.vertx.core.Context context = Vertx.currentContext();
+        String vertxContextStr = null;
+        Boolean isDuplicatedContext = null;
+
+        if (context != null) {
+            isDuplicatedContext = ((ContextInternal) context).isDuplicate();
+            vertxContextStr = context.getClass().getName() + "@" + context.hashCode();
+        }
+
+        LOGGER.debug(prefix + " - Current thread: " + currentThread.getName() + ", isVertxThread: " + isVertxThread
+                + ", isVertxWorker: " + isVertxWorker + " - Vertx context: " + vertxContextStr
+                + ", isDuplicatedContext: " + isDuplicatedContext);
     }
 }

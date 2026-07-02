@@ -4,6 +4,7 @@ import java.time.Instant;
 
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 
 public class InstrumentationContext {
 
@@ -25,13 +26,15 @@ public class InstrumentationContext {
 
     private final Span startSpan;
 
+    private final Scope startSpanScope;
+
     private InstrumentationContext(String jsonPosition,
             int iteration,
             boolean retrying,
             short retryAttempt,
             TaskType taskType,
             String containerPosition,
-            Context parentContext, Span startSpan, Instant startTime) {
+            Context parentContext, Span startSpan, Scope startSpanScope, Instant startTime) {
         this.jsonPosition = jsonPosition;
         this.iteration = iteration;
         this.retrying = retrying;
@@ -40,6 +43,7 @@ public class InstrumentationContext {
         this.containerPosition = containerPosition;
         this.parentContext = parentContext;
         this.startSpan = startSpan;
+        this.startSpanScope = startSpanScope;
         this.startTime = startTime;
     }
 
@@ -79,6 +83,10 @@ public class InstrumentationContext {
         return startSpan;
     }
 
+    public Scope getStartSpanScope() {
+        return startSpanScope;
+    }
+
     public Instant getStartTime() {
         return startTime;
     }
@@ -102,6 +110,8 @@ public class InstrumentationContext {
         private String containerPosition;
 
         private Span startSpan;
+
+        private Scope startSpanScope;
 
         private Instant startTime;
 
@@ -146,6 +156,11 @@ public class InstrumentationContext {
             return this;
         }
 
+        public Builder withStartSpanScope(Scope startSpanScope) {
+            this.startSpanScope = startSpanScope;
+            return this;
+        }
+
         public Builder withStartTime(Instant startTime) {
             this.startTime = startTime;
             return this;
@@ -158,7 +173,7 @@ public class InstrumentationContext {
 
         public InstrumentationContext build() {
             return new InstrumentationContext(jsonPosition, iteration, retrying, retryAttempt,
-                    taskType, containerPosition, parentContext, startSpan, startTime);
+                    taskType, containerPosition, parentContext, startSpan, startSpanScope, startTime);
         }
     }
 }
