@@ -53,7 +53,7 @@ public class SpanBuilderFactory {
     public SpanBuilder newTaskSpan(String name, String workflowApplicationId, String workflowNamespace, String workflowName,
             String workflowInstanceId, String workflowVersion,
             String taskInstanceId, String taskType, String taskName,
-            int iteration, boolean retrying, short retryAttempt,
+            int iteration, boolean retrying, int retryAttempt,
             Context parentContext, SpanContext... spanContextLink) {
         SpanBuilder builder = tracer.spanBuilder(name);
         applyWorkflowAttributes(builder, workflowApplicationId, workflowNamespace, workflowName, workflowInstanceId,

@@ -28,9 +28,8 @@ import io.quarkiverse.flow.config.FlowDefinitionsConfig;
 import io.quarkiverse.flow.internal.WorkflowApplicationInitializer;
 import io.quarkiverse.flow.internal.WorkflowNameUtils;
 import io.quarkiverse.flow.metrics.MicrometerExecutionListener;
-import io.quarkiverse.flow.opentelemetry.CDIOtelHttpRequestDecorator;
 import io.quarkiverse.flow.opentelemetry.InstrumentationContextManager;
-import io.quarkiverse.flow.opentelemetry.OtelWorkflowExecutionListener;
+import io.quarkiverse.flow.opentelemetry.OTelWorkflowExecutionListener;
 import io.quarkiverse.flow.opentelemetry.SpanBuilderFactory;
 import io.quarkiverse.flow.providers.CredentialsProviderSecretManager;
 import io.quarkiverse.flow.providers.FaultToleranceProvider;
@@ -195,12 +194,10 @@ class FlowProcessor {
     void configureOpenTelemetry(Capabilities capabilities,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
         if (capabilities.isPresent(Capability.OPENTELEMETRY_TRACER)) {
-            System.out.println("XXXXXXXXXXXXXXXXXXXXX PRODUCING OpenTelemetryIntegration");
             additionalBeans.produce(AdditionalBeanBuildItem.builder()
                     .addBeanClass(SpanBuilderFactory.class)
                     .addBeanClass(InstrumentationContextManager.class)
-                    .addBeanClass(OtelWorkflowExecutionListener.class)
-//                    .addBeanClass(CDIOtelHttpRequestDecorator.class)
+                    .addBeanClass(OTelWorkflowExecutionListener.class)
                     .setDefaultScope(SINGLETON)
                     .setUnremovable()
                     .build());
@@ -332,18 +329,20 @@ class FlowProcessor {
     @BuildStep
     void registerWorkflowApp(WorkflowApplicationRecorder recorder,
             ShutdownContextBuildItem shutdown,
+            Capabilities capabilities,
             Optional<MetricsCapabilityBuildItem> metricsCapability,
             BuildProducer<SyntheticBeanBuildItem> beans) {
 
         boolean isMicrometerSupported = metricsCapability
                 .map(capability -> capability.metricsSupported(MetricsFactory.MICROMETER)).orElse(false);
+        boolean isOtelSupported = capabilities.isPresent(Capability.OPENTELEMETRY_TRACER);
 
         beans.produce(SyntheticBeanBuildItem.configure(WorkflowApplication.class)
                 .scope(ApplicationScoped.class)
                 .unremovable()
                 .setRuntimeInit()
                 .addInjectionPoint(ClassType.create(DotName.createSimple(WorkflowApplicationCreator.class)))
-                .createWith(recorder.workflowAppCreator(shutdown, isMicrometerSupported))
+                .createWith(recorder.workflowAppCreator(shutdown, isMicrometerSupported, isOtelSupported))
                 .done());
         LOG.info("Flow: Registering Workflow Application bean: {}", WorkflowApplication.class.getName());
     }

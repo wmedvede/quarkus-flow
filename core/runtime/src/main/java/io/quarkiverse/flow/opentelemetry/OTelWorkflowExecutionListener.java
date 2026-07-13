@@ -46,9 +46,9 @@ import io.vertx.core.Vertx;
 import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.impl.VertxThread;
 
-public class OtelWorkflowExecutionListener implements WorkflowExecutionListener {
+public class OTelWorkflowExecutionListener implements WorkflowExecutionListener {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(OtelWorkflowExecutionListener.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(OTelWorkflowExecutionListener.class);
 
     @ConfigProperty(name = "quarkus.flow.otel.task.span-name-mode", defaultValue = "TASK_TYPE_AND_NAME")
     SpanUtils.SpanNameGenerationMode spanNameGenerationMode;
@@ -200,8 +200,8 @@ public class OtelWorkflowExecutionListener implements WorkflowExecutionListener 
 
         appendTaskEvent(startSpan, eventInfo.eventType());
 
-        boolean sdkInstrumentation = true;
-        boolean listenerInstrumentation = false;
+        boolean sdkInstrumentation = false;
+        boolean listenerInstrumentation = true;
         Scope startSpanScope = null;
         if (eventInfo.taskType() == TaskType.CALL) {
             if (sdkInstrumentation) {

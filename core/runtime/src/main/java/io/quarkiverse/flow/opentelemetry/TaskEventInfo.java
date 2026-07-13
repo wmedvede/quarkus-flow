@@ -15,8 +15,8 @@ public record TaskEventInfo(
         String taskName,
         int taskInstanceIteration,
         boolean taskInstanceRetrying,
-        short taskInstanceRetryAttempt,
-        short taskInstanceRetryCount
+        int taskInstanceRetryAttempt,
+        int taskInstanceRetryCount
 
 ) {
     public static TaskEventInfo from(TaskEvent ev) {
@@ -38,7 +38,7 @@ public record TaskEventInfo(
                 taskContext.iteration(),
                 ((TaskContext) ev.taskContext()).isRetrying(),
                 ev.taskContext().retryAttempt(),
-                ((TaskContext) ev.taskContext()).tryRetryCount().orElse((short) 0));
+                ((TaskContext) ev.taskContext()).tryRetryCount().orElse(0));
 
     }
 }

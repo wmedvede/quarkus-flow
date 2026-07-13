@@ -1,6 +1,6 @@
 package io.quarkiverse.flow.opentelemetry;
 
-import static io.quarkiverse.flow.opentelemetry.OtelWorkflowExecutionListener.printThreadAndCurrentVertxContext;
+import static io.quarkiverse.flow.opentelemetry.OTelWorkflowExecutionListener.printThreadAndCurrentVertxContext;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.client.Invocation;
@@ -15,8 +15,11 @@ import io.serverlessworkflow.impl.TaskContext;
 import io.serverlessworkflow.impl.WorkflowContext;
 import io.serverlessworkflow.impl.executors.http.HttpRequestDecorator;
 
-public class CDIOtelHttpRequestDecorator implements HttpRequestDecorator {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CDIOtelHttpRequestDecorator.class);
+
+//TODO WM, remove this class?
+
+public class CDIOTelHttpRequestDecorator implements HttpRequestDecorator {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CDIOTelHttpRequestDecorator.class);
     @Inject
     InstrumentationContextManager contextManager;
 
@@ -25,7 +28,7 @@ public class CDIOtelHttpRequestDecorator implements HttpRequestDecorator {
         String workflowInstanceId = workflowContext.instanceData().id();
         String taskId = taskContext.position().jsonPointer();
         int iteration = taskContext.iteration();
-        short retryAttempt = taskContext.retryAttempt();
+        int retryAttempt = taskContext.retryAttempt();
 
         LOGGER.debug("Decorating request for workflowInstanceId: " + workflowInstanceId + ", taskId: " + taskId
                 + ", iteration: " + iteration + ", retryAttempt: " + retryAttempt);

@@ -7,8 +7,8 @@ import io.serverlessworkflow.impl.TaskContext;
 import io.serverlessworkflow.impl.WorkflowContext;
 import io.serverlessworkflow.impl.executors.http.HttpRequestDecorator;
 
-public class OtelHttpRequestDecorator implements HttpRequestDecorator {
-    private static volatile CDIOtelHttpRequestDecorator DELEGATE;
+public class OTelHttpRequestDecorator implements HttpRequestDecorator {
+    private static volatile CDIOTelHttpRequestDecorator DELEGATE;
     private static final Object LOCK = new Object();
 
     @Override
@@ -20,7 +20,7 @@ public class OtelHttpRequestDecorator implements HttpRequestDecorator {
 
             return;
         }
-        CDIOtelHttpRequestDecorator delegate = DELEGATE;
+        CDIOTelHttpRequestDecorator delegate = DELEGATE;
         if (delegate == null) {
             System.out.println("XXXXXXXXXXXXXXXXXXXXXXXXX DECORATOR 2222");
             synchronized (LOCK) {
@@ -28,7 +28,7 @@ public class OtelHttpRequestDecorator implements HttpRequestDecorator {
                 if (delegate == null) {
                     System.out.println("XXXXXXXXXXXXXXXXXXXXXXXXX DECORATOR 3333");
                     delegate = Arc.container()
-                            .instance(CDIOtelHttpRequestDecorator.class)
+                            .instance(CDIOTelHttpRequestDecorator.class)
                             .get();
 
                     if (delegate == null) {

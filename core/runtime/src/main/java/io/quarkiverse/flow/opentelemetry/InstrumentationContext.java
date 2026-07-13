@@ -10,7 +10,7 @@ public class InstrumentationContext {
 
     private final int iteration;
 
-    private final short retryAttempt;
+    private final int retryAttempt;
 
     private final boolean retrying;
 
@@ -31,7 +31,7 @@ public class InstrumentationContext {
     private InstrumentationContext(String jsonPosition,
             int iteration,
             boolean retrying,
-            short retryAttempt,
+            int retryAttempt,
             TaskType taskType,
             String containerPosition,
             Context parentContext, Span startSpan, Scope startSpanScope, Instant startTime) {
@@ -55,7 +55,7 @@ public class InstrumentationContext {
         return iteration;
     }
 
-    public short getRetryAttempt() {
+    public int getRetryAttempt() {
         return retryAttempt;
     }
 
@@ -103,7 +103,7 @@ public class InstrumentationContext {
 
         private boolean retrying;
 
-        private short retryAttempt;
+        private int retryAttempt;
 
         private TaskType taskType;
 
@@ -136,7 +136,7 @@ public class InstrumentationContext {
             return this;
         }
 
-        public Builder withRetryAttempt(short retryAttempt) {
+        public Builder withRetryAttempt(int retryAttempt) {
             this.retryAttempt = retryAttempt;
             return this;
         }

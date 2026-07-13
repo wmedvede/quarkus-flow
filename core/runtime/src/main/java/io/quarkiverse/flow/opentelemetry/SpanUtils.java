@@ -24,7 +24,7 @@ public class SpanUtils {
             String taskInstanceId,
             TaskType taskType,
             String taskName,
-            int taskInstanceIteration, short retryAttempt) {
+            int taskInstanceIteration, int retryAttempt) {
         if (generationMode == SpanNameGenerationMode.TASK_TYPE_AND_NAME) {
             return taskType + ": " + taskName + " iteration: " + taskInstanceIteration + ", retry: " + retryAttempt;
         }

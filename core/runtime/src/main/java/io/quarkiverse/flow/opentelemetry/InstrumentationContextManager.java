@@ -27,23 +27,23 @@ public class InstrumentationContextManager {
         workflowInstanceTaskContext.putIfAbsent(workflowInstanceId, new ConcurrentHashMap<>());
     }
 
-    public static String taskContextId(String taskInstanceId, int iteration, short retryAttempt) {
+    public static String taskContextId(String taskInstanceId, int iteration, int retryAttempt) {
         return taskInstanceId + "-" + iteration + "-" + retryAttempt;
     }
 
     public void putTaskInstanceInstanceContext(String workflowInstanceId, String taskInstanceId, int iteration,
-            short retryAttempt, InstrumentationContext context) {
+            int retryAttempt, InstrumentationContext context) {
         workflowInstanceTaskContext.computeIfAbsent(workflowInstanceId, key -> new ConcurrentHashMap<>())
                 .put(taskContextId(taskInstanceId, iteration, retryAttempt), context);
     }
 
     public void removeTaskInstanceInstanceContext(String workflowInstanceId, String taskInstanceId, int iteration,
-            short retryAttempt) {
+            int retryAttempt) {
         workflowInstanceTaskContext.get(workflowInstanceId).remove(taskContextId(taskInstanceId, iteration, retryAttempt));
     }
 
     public InstrumentationContext getTaskInstanceContext(String workflowInstanceId, String taskInstanceId, int iteration,
-            short retryAttempt) {
+            int retryAttempt) {
         return workflowInstanceTaskContext.get(workflowInstanceId).get(taskContextId(taskInstanceId, iteration, retryAttempt));
     }
 
