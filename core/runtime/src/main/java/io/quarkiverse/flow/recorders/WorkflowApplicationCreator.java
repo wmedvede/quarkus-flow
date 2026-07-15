@@ -122,7 +122,7 @@ public class WorkflowApplicationCreator {
                     "Add 'quarkus-micrometer-registry-prometheus' dependency to enable metrics.");
         }
 
-        if (otelBuildConfig.isEnabled() && !options.isOtelSupported()) {
+        if (otelBuildConfig.enabled().isPresent() && otelBuildConfig.isEnabled() && !options.isOtelSupported()) {
             LOG.warn("Quarkus Flow open telemetry is enabled but required extension is not available or not" +
                     " correctly configured. Add the 'quarkus-opentelemetry' dependency to enable it and be sure that" +
                     " the 'quarkus.otel.traces.enabled' property if set to true.");

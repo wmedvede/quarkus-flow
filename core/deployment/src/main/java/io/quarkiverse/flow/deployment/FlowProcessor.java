@@ -5,6 +5,7 @@ import static io.quarkiverse.flow.deployment.WorkflowNamingConverter.generateFlo
 import static io.quarkiverse.flow.deployment.WorkflowNamingConverter.namespaceToPackage;
 import static io.quarkus.arc.processor.DotNames.SINGLETON;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -28,7 +29,9 @@ import io.quarkiverse.flow.config.FlowDefinitionsConfig;
 import io.quarkiverse.flow.internal.WorkflowApplicationInitializer;
 import io.quarkiverse.flow.internal.WorkflowNameUtils;
 import io.quarkiverse.flow.metrics.MicrometerExecutionListener;
+import io.quarkiverse.flow.opentelemetry.CDIOTelEmittedEventDecorator;
 import io.quarkiverse.flow.opentelemetry.InstrumentationContextManager;
+import io.quarkiverse.flow.opentelemetry.OTelEmittedEventDecorator;
 import io.quarkiverse.flow.opentelemetry.OTelWorkflowExecutionListener;
 import io.quarkiverse.flow.opentelemetry.SpanBuilderFactory;
 import io.quarkiverse.flow.providers.CredentialsProviderSecretManager;
@@ -58,6 +61,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Produce;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.metrics.MetricsCapabilityBuildItem;
@@ -68,6 +72,7 @@ import io.quarkus.runtime.metrics.MetricsFactory;
 import io.serverlessworkflow.impl.WorkflowApplication;
 import io.serverlessworkflow.impl.WorkflowDefinition;
 import io.serverlessworkflow.impl.WorkflowException;
+import io.serverlessworkflow.impl.events.EmittedEventDecorator;
 import io.serverlessworkflow.impl.events.EventConsumer;
 import io.serverlessworkflow.impl.events.EventPublisher;
 import io.serverlessworkflow.impl.lifecycle.WorkflowExecutionCompletableListener;
@@ -192,15 +197,20 @@ class FlowProcessor {
 
     @BuildStep
     void configureOpenTelemetry(Capabilities capabilities,
-            BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<GeneratedResourceBuildItem> generatedResources) {
         if (capabilities.isPresent(Capability.OPENTELEMETRY_TRACER)) {
             additionalBeans.produce(AdditionalBeanBuildItem.builder()
                     .addBeanClass(SpanBuilderFactory.class)
                     .addBeanClass(InstrumentationContextManager.class)
                     .addBeanClass(OTelWorkflowExecutionListener.class)
+                    .addBeanClass(CDIOTelEmittedEventDecorator.class)
                     .setDefaultScope(SINGLETON)
                     .setUnremovable()
                     .build());
+            generatedResources
+                    .produce(new GeneratedResourceBuildItem("META-INF/services/" + EmittedEventDecorator.class.getName(),
+                            OTelEmittedEventDecorator.class.getName().getBytes(StandardCharsets.UTF_8)));
         }
     }
 

@@ -3,34 +3,38 @@ package io.quarkiverse.flow.opentelemetry;
 import static io.quarkiverse.flow.opentelemetry.OTelWorkflowExecutionListener.printThreadAndCurrentVertxContext;
 
 import jakarta.inject.Inject;
-import jakarta.ws.rs.client.Invocation;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import io.cloudevents.core.builder.CloudEventBuilder;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.propagation.TextMapSetter;
+import io.quarkiverse.flow.config.FlowOTelConfig;
 import io.serverlessworkflow.impl.TaskContext;
 import io.serverlessworkflow.impl.WorkflowContext;
-import io.serverlessworkflow.impl.executors.http.HttpRequestDecorator;
+import io.serverlessworkflow.impl.events.EmittedEventDecorator;
 
+public class CDIOTelEmittedEventDecorator implements EmittedEventDecorator {
 
-//TODO WM, remove this class?
-
-public class CDIOTelHttpRequestDecorator implements HttpRequestDecorator {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CDIOTelHttpRequestDecorator.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CDIOTelEmittedEventDecorator.class);
     @Inject
     InstrumentationContextManager contextManager;
+    @Inject
+    FlowOTelConfig oTelConfig;
 
     @Override
-    public void decorate(Invocation.Builder decorated, WorkflowContext workflowContext, TaskContext taskContext) {
+    public void decorate(CloudEventBuilder builder, WorkflowContext workflowContext, TaskContext taskContext) {
+        if (!oTelConfig.isEnabled()) {
+            return;
+        }
         String workflowInstanceId = workflowContext.instanceData().id();
         String taskId = taskContext.position().jsonPointer();
         int iteration = taskContext.iteration();
         int retryAttempt = taskContext.retryAttempt();
 
-        LOGGER.debug("Decorating request for workflowInstanceId: " + workflowInstanceId + ", taskId: " + taskId
+        LOGGER.debug("Decorating cloud event for workflowInstanceId: " + workflowInstanceId + ", taskId: " + taskId
                 + ", iteration: " + iteration + ", retryAttempt: " + retryAttempt);
 
         InstrumentationContext taskInstanceContext = contextManager.getTaskInstanceContext(workflowInstanceId, taskId,
@@ -42,19 +46,19 @@ public class CDIOTelHttpRequestDecorator implements HttpRequestDecorator {
             return;
         }
 
-        TextMapSetter<Invocation.Builder> setter = (carrier, key, value) -> {
+        TextMapSetter<CloudEventBuilder> setter = (carrier, name, value) -> {
             if (carrier != null) {
-                LOGGER.debug(" setting request header key: " + key + " with value: " + value);
-                carrier.header(key, value);
+                LOGGER.debug("Setting cloud event context attribute name: " + name + " with value: " + value);
+                carrier.withContextAttribute(name, value);
             }
         };
 
-        printThreadAndCurrentVertxContext("DECORATING - taskId: " + taskId);
+        printThreadAndCurrentVertxContext("DECORATING EVENT for - taskId: " + taskId);
 
         Context propagtedContext = taskInstanceContext.getStartSpan().storeInContext(taskInstanceContext.getParentContext());
         GlobalOpenTelemetry.getPropagators().getTextMapPropagator().inject(
                 propagtedContext,
-                decorated,
+                builder,
                 setter);
     }
 }
