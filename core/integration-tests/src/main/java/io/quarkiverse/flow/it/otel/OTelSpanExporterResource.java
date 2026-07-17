@@ -6,9 +6,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 import io.opentelemetry.sdk.testing.exporter.InMemorySpanExporter;
 import io.opentelemetry.sdk.trace.data.SpanData;
@@ -26,8 +28,17 @@ public class OTelSpanExporterResource {
     @jakarta.ws.rs.Produces(MediaType.APPLICATION_JSON)
     public List<SpanData> getSpans() {
         List<SpanData> spans = exporter.getFinishedSpanItems();
+        //TODO WM REMOVE
         System.out.println("VAMOOOOOOOOOOOOOOOO: " + spans.size());
         return spans;
+    }
+
+    @Path("reset-spans")
+    @DELETE
+    @jakarta.ws.rs.Produces(MediaType.APPLICATION_JSON)
+    public Response resetSpans() {
+        exporter.reset();
+        return Response.status(204).build();
     }
 
     @ApplicationScoped

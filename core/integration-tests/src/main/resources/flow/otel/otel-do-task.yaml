@@ -8,10 +8,10 @@ do:
       do:
         - set1:
             set:
-              set1-message: The set1 message
+              set1-message: Set1 message
         - set2:
             set:
-              set2-message: The set2 message
+              set2-message: Set2 message
         - set3:
             set:
-              set3-message: The set3 message
+              set3-message: Set3 message

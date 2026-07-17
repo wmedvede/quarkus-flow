@@ -20,6 +20,11 @@ public class Utils {
 
     public static JsonPath executeWorkflow(String workflow, String input, int connectTimeoutInSeconds,
             int executionTimeoutInSeconds) {
+        return executeWorkflow(workflow, input, connectTimeoutInSeconds, executionTimeoutInSeconds, 500);
+    }
+
+    public static JsonPath executeWorkflow(String workflow, String input, int connectTimeoutInSeconds,
+            int executionTimeoutInSeconds, int expectedStatusCode) {
         return RestAssured.given()
                 .config(RestAssuredConfig.config().httpClient(
                         HttpClientConfig.httpClientConfig().reuseHttpClientInstance()
@@ -32,7 +37,7 @@ public class Utils {
                 .body(input)
                 .post(workflow)
                 .then()
-                .statusCode(200)
+                .statusCode(expectedStatusCode)
                 .extract()
                 .jsonPath();
     }
@@ -43,7 +48,6 @@ public class Utils {
             return workflow.equals(attributes.get("flow.workflow.name"))
                     && version.equals(attributes.get("flow.workflow.version"));
         }).map(item -> OBJECT_MAPPER.convertValue(item, SpanInfo.class)).collect(Collectors.toList());
-
     }
 
     public static List<Map<String, Object>> getSpans() {
@@ -53,5 +57,14 @@ public class Utils {
                 .get("/otel-span-exporter/spans")
                 .body().as(new TypeRef<>() {
                 });
+    }
+
+    public static void deleteSpans() {
+        RestAssured.given()
+                .contentType(ContentType.JSON)
+                .accept(ContentType.JSON)
+                .delete("/otel-span-exporter/reset-spans")
+                .then()
+                .statusCode(204);
     }
 }

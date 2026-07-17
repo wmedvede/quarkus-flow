@@ -1,5 +1,6 @@
 package io.quarkiverse.flow.it.otel;
 
+import static io.quarkiverse.flow.it.otel.util.Utils.deleteSpans;
 import static io.quarkiverse.flow.it.otel.util.Utils.executeWorkflow;
 import static io.quarkiverse.flow.it.otel.util.Utils.getWorkflowSpans;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -9,19 +10,39 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.junit.jupiter.api.BeforeEach;
+
 import io.quarkiverse.flow.it.otel.util.IndexedSpanInfo;
+import io.quarkiverse.flow.it.otel.util.IndexedSpanInfo.WorkflowSpanKey;
 import io.quarkiverse.flow.it.otel.util.SpanInfo;
 
 abstract class OTelBaseIT {
 
     abstract String workflowName();
 
+    @BeforeEach
+    void setup() {
+        deleteSpans();
+    }
+
+    int statusCode() {
+        return 200;
+    }
+
     String workVersion() {
         return "1.0.0";
     }
 
+    WorkflowSpanKey workflowParentSpan() {
+        return WorkflowSpanKey.from(workflowName(), workVersion());
+    }
+
     IndexedSpanInfo executeAndGetSpans(int expectedSpans) {
-        executeWorkflow("/otel-workflows/" + workflowName(), "{}", 5, 60);
+        return executeAndGetSpans(expectedSpans, "{}");
+    }
+
+    IndexedSpanInfo executeAndGetSpans(int expectedSpans, String input) {
+        executeWorkflow("/otel-workflows/" + workflowName(), input, 5, 60, statusCode());
         List<SpanInfo> spanList = getWorkflowSpansAtMost(workflowName(), workVersion(), expectedSpans, 60);
         IndexedSpanInfo indexedSpanInfo = IndexedSpanInfo.from(spanList);
 
@@ -41,7 +62,7 @@ abstract class OTelBaseIT {
     }
 
     static void assertThatHasParent(IndexedSpanInfo indexedSpanInfo, IndexedSpanInfo.TaskSpanKey taskSpanKey,
-                                    IndexedSpanInfo.TaskSpanKey expectedParentKey) {
+            IndexedSpanInfo.TaskSpanKey expectedParentKey) {
         SpanInfo taskSpanInfo = indexedSpanInfo.getSpanInfo(taskSpanKey);
         assertThat(taskSpanInfo)
                 .withFailMessage("Task span %s is not present", taskSpanKey)
@@ -65,7 +86,7 @@ abstract class OTelBaseIT {
     }
 
     static void assertThatHasParent(IndexedSpanInfo indexedSpanInfo, IndexedSpanInfo.TaskSpanKey taskSpanKey,
-                                    IndexedSpanInfo.WorkflowSpanKey expectedParentKey) {
+            IndexedSpanInfo.WorkflowSpanKey expectedParentKey) {
         SpanInfo taskSpanInfo = indexedSpanInfo.getSpanInfo(taskSpanKey);
         assertThat(taskSpanInfo)
                 .withFailMessage("Task span %s is not present", taskSpanKey)

@@ -31,6 +31,15 @@ public class IndexedSpanInfo {
         public static TaskSpanKey from(String taskId, int iteration, int retryAttempt, boolean retrying) {
             return new TaskSpanKey(taskId, iteration, retryAttempt, retrying);
         }
+
+        public static TaskSpanKey from(String taskId, int iteration) {
+            return new TaskSpanKey(taskId, iteration, 0, false);
+        }
+
+        public static TaskSpanKey from(String taskId) {
+            return new TaskSpanKey(taskId, 1, 0, false);
+        }
+
     }
 
     public static class WorkflowSpanKey {

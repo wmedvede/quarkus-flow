@@ -6,13 +6,13 @@ import io.quarkiverse.flow.it.otel.util.IndexedSpanInfo;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 
 @QuarkusIntegrationTest
-class SetTaskIT extends OTelBaseIT {
+class EmitTaskIT extends OTelBaseIT {
 
-    private static final String SET_TASK = "do/0/setTask";
+    private static final String EMIT_TASK = "do/0/emitTask";
 
     @Override
     String workflowName() {
-        return "otel-set-task";
+        return "otel-emit-task";
     }
 
     @Override
@@ -23,6 +23,6 @@ class SetTaskIT extends OTelBaseIT {
     @Test
     void producedSpans() {
         IndexedSpanInfo indexedSpanInfo = executeAndGetSpans(2);
-        assertThatHasParent(indexedSpanInfo, IndexedSpanInfo.TaskSpanKey.from(SET_TASK), workflowParentSpan());
+        assertThatHasParent(indexedSpanInfo, IndexedSpanInfo.TaskSpanKey.from(EMIT_TASK), workflowParentSpan());
     }
 }
