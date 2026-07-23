@@ -14,6 +14,7 @@ import static io.quarkiverse.flow.opentelemetry.runtime.WorkflowEventType.WORKFL
 import static io.quarkiverse.flow.opentelemetry.runtime.WorkflowEventType.WORKFLOW_SUSPENDED;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -55,6 +56,8 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
 
     private static final Logger LOGGER = LoggerFactory.getLogger(OTelWorkflowExecutionListener.class);
 
+    private static final String OTEL_CONTEXT = "io.quarkus.opentelemetry.runtime.QuarkusContextStorage" + ".otelContext";
+
     @ConfigProperty(name = "quarkus.flow.otel.task.name-strategy", defaultValue = "action-and-task-name")
     SpanUtils.TaskNameStrategy taskNameStrategy;
 
@@ -73,8 +76,8 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
             return;
         }
         WorkflowEventInfo eventInfo = WorkflowEventInfo.from(ev);
-        logWorkflowEvent(eventInfo);
-        printThreadAndCurrentVertxContext("On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName());
+        logWorkflowEvent(eventInfo, "");
+        //        printThreadAndCurrentVertxContext("On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName());
 
         Context parentContext = Context.current();
         String workflowSpanName = generateWorkflowSpanName(eventInfo.wfName());
@@ -127,8 +130,8 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
             return;
         }
         WorkflowEventInfo eventInfo = WorkflowEventInfo.from(ev);
-        logWorkflowEvent(eventInfo);
-        printThreadAndCurrentVertxContext("On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName());
+        logWorkflowEvent(eventInfo, "");
+        //        printThreadAndCurrentVertxContext("On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName());
 
         InstrumentationContext workflowContext = contextManager.getWorkflowInstanceContext(eventInfo.wfInstanceId());
         if (workflowContext == null) {
@@ -174,10 +177,10 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
             return;
         }
         TaskEventInfo eventInfo = TaskEventInfo.from(ev);
-        logTaskEvent(eventInfo);
-        printThreadAndCurrentVertxContext(
-                "On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName() + ", taskName: "
-                        + eventInfo.taskName());
+        logTaskEvent(eventInfo, "");
+        //        printThreadAndCurrentVertxContext(
+        //                "On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName() + ", taskName: "
+        //                        + eventInfo.taskName());
 
         InstrumentationContext parentTaskContext = contextManager.findEnclosingParentContext(eventInfo.wfInstanceId(),
                 eventInfo.taskId());
@@ -205,6 +208,7 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
         Scope startSpanScope = null;
         if (requiresPropagation(eventInfo.taskType(), ev.taskContext())) {
             startSpanScope = startSpan.makeCurrent();
+            logTaskEvent(eventInfo, " after startSpan.makeCurrent()");
         }
 
         InstrumentationContext taskInstanceContext = InstrumentationContext.newBuilder()
@@ -255,10 +259,11 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
             return;
         }
         TaskEventInfo eventInfo = TaskEventInfo.from(ev);
-        logTaskEvent(eventInfo);
-        printThreadAndCurrentVertxContext(
-                "On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName() + ", taskName: "
-                        + eventInfo.taskName());
+        logTaskEvent(eventInfo, "");
+
+        //        printThreadAndCurrentVertxContext(
+        //                "On - " + eventInfo.eventType() + ", workflowName: " + eventInfo.wfName() + ", taskName: "
+        //                        + eventInfo.taskName());
 
         InstrumentationContext taskInstanceContext = contextManager.getTaskInstanceContext(eventInfo.wfInstanceId(),
                 eventInfo.taskId(),
@@ -274,7 +279,9 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
         if (TASK_CANCELLED == eventInfo.eventType() || TASK_COMPLETED == eventInfo.eventType()) {
             Span startSpan = taskInstanceContext.getStartSpan();
             if (taskInstanceContext.getStartSpanScope() != null) {
+                logTaskEvent(eventInfo, " before getStartSpanScope.close()");
                 taskInstanceContext.getStartSpanScope().close();
+                logTaskEvent(eventInfo, " after getStartSpanScope.close()");
             }
             appendTaskEvent(startSpan, eventInfo.eventType());
             startSpan.setStatus(StatusCode.OK);
@@ -340,23 +347,38 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
         }
     }
 
-    private static void logWorkflowEvent(WorkflowEventInfo eventInfo) {
-        LOGGER.debug("On - " + eventInfo.eventType() + ": workflowApplicationId: " + eventInfo.wfApplicationId()
-                + ", workflowNamespace: " + eventInfo.wfNamespace() + ", workflowName: " + eventInfo.wfName()
-                + ", workflowInstanceId: " + eventInfo.wfInstanceId() + ", workflowVersion: " + eventInfo.wfVersion());
+    private static void logWorkflowEvent(WorkflowEventInfo eventInfo, String prefix) {
+        String currentThread = Thread.currentThread().getName();
+        long id = Thread.currentThread().getId();
+        System.out.println(
+                LocalDateTime.now() + " - XX " + currentThread + ":" + id + " - " + prefix + " - On - " + eventInfo.eventType()
+                        + ": workflowApplicationId: " + eventInfo.wfApplicationId()
+                        + ", workflowNamespace: " + eventInfo.wfNamespace() + ", workflowName: " + eventInfo.wfName()
+                        + ", workflowInstanceId: " + eventInfo.wfInstanceId() + ", workflowVersion: " + eventInfo.wfVersion()
+                        + getThreadAndCurrentVertxContext(", with: "));
     }
 
-    private static void logTaskEvent(TaskEventInfo eventInfo) {
-        LOGGER.debug("On - " + eventInfo.eventType() + ", taskName: " + eventInfo.taskName()
-                + ", taskType: " + eventInfo.taskType() + ", taskId: " + eventInfo.taskId()
-                + ", iteration: " + eventInfo.taskInstanceIteration()
-                + ", isRetrying: " + eventInfo.taskInstanceRetrying()
-                + ", retryAttempt: " + eventInfo.taskInstanceRetryAttempt()
-                + ", retryCount: " + eventInfo.taskInstanceRetryCount());
+    private static void logTaskEvent(TaskEventInfo eventInfo, String prefix) {
+        String currentThread = Thread.currentThread().getName();
+        long id = Thread.currentThread().getId();
+        System.out.println(
+                LocalDateTime.now() + " - XX " + currentThread + ":" + id + " - " + prefix + " - On - " + eventInfo.eventType()
+                        + ", taskName: "
+                        + eventInfo.taskName()
+                        + ", taskType: " + eventInfo.taskType() + ", taskId: " + eventInfo.taskId()
+                        + ", iteration: " + eventInfo.taskInstanceIteration()
+                        + ", isRetrying: " + eventInfo.taskInstanceRetrying()
+                        + ", retryAttempt: " + eventInfo.taskInstanceRetryAttempt()
+                        + ", retryCount: " + eventInfo.taskInstanceRetryCount() + getThreadAndCurrentVertxContext(", with: "));
+
     }
 
     // TODO remove this method the respective invocations.
     public static void printThreadAndCurrentVertxContext(String prefix) {
+        System.out.println(getThreadAndCurrentVertxContext(prefix) + "\n\n");
+    }
+
+    public static String getThreadAndCurrentVertxContext(String prefix) {
         Thread currentThread = Thread.currentThread();
         Boolean isVertxThread = null;
         Boolean isVertxWorker = null;
@@ -375,8 +397,13 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
             vertxContextStr = context.getClass().getName() + "@" + context.hashCode();
         }
 
-        LOGGER.debug(prefix + " - Current thread: " + currentThread.getName() + ", isVertxThread: " + isVertxThread
+        io.opentelemetry.context.Context otelContext = context.getLocal(OTEL_CONTEXT);
+
+        return prefix + " - Current thread: " + currentThread.getName() + ":" + currentThread.getId() + ", isVertxThread: "
+                + isVertxThread
                 + ", isVertxWorker: " + isVertxWorker + " - Vertx context: " + vertxContextStr
-                + ", isDuplicatedContext: " + isDuplicatedContext);
+                + ", isDuplicatedContext: " + isDuplicatedContext
+                + ", OTEL_CONTEXT hashCode: " + (otelContext != null ? otelContext.hashCode() : null)
+                + ", OTEL_CONTEXT: " + otelContext;
     }
 }
