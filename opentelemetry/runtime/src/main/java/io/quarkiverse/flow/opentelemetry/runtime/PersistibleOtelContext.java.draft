@@ -1,0 +1,11 @@
+package io.quarkiverse.flow.opentelemetry.runtime;
+
+public interface PersistibleOtelContext {
+
+    String getId();
+
+    String startSpanId();
+
+    String startTraceId();
+
+}

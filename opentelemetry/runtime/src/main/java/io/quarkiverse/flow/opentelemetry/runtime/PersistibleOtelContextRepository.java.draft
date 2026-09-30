@@ -1,0 +1,13 @@
+package io.quarkiverse.flow.opentelemetry.runtime;
+
+public interface PersistibleOtelContextRepository {
+
+    PersistibleOtelContext newInstance(String id, String startTraceId, String startSpanId);
+
+    PersistibleOtelContext findById(String id);
+
+    boolean deleteById(String id);
+
+    void persist(PersistibleOtelContext persistibleOtelContext);
+
+}

@@ -1,0 +1,71 @@
+package io.quarkiverse.flow.opentelemetry.runtime;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import io.quarkus.arc.DefaultBean;
+import io.smallrye.config.Config;
+
+@DefaultBean
+@ApplicationScoped
+public class FallbackPersistibleOtelContextRepository implements PersistibleOtelContextRepository {
+
+    @Override
+    public PersistibleOtelContext newInstance(String workflowId, String startTraceId, String startSpanId) {
+        return new PersistibleOtelContext() {
+
+            @Override
+            public String getId() {
+                return workflowId;
+            }
+
+            @Override
+            public String startSpanId() {
+                return startSpanId;
+            }
+
+            @Override
+            public String startTraceId() {
+                return startTraceId;
+            }
+        };
+    }
+
+    @Override
+    public PersistibleOtelContext findById(String id) {
+
+        String workflowInstanceId = Config.get().getOptionalValue("workflowInstanceIid", String.class).orElse(null);
+        String traceId = Config.get().getOptionalValue("traceId", String.class).orElse(null);
+        String spanId = Config.get().getOptionalValue("spanId", String.class).orElse(null);
+        if (workflowInstanceId != null) {
+            return new PersistibleOtelContext() {
+                @Override
+                public String getId() {
+                    return workflowInstanceId;
+                }
+
+                @Override
+                public String startSpanId() {
+                    return spanId;
+                }
+
+                @Override
+                public String startTraceId() {
+                    return traceId;
+                }
+            };
+        }
+        return null;
+    }
+
+    @Override
+    public boolean deleteById(String id) {
+        return false;
+    }
+
+    @Override
+    public void persist(PersistibleOtelContext persistibleOtelContext) {
+        System.out.println("XXX - Persist workflow persistible context, workflowId: + " +
+                persistibleOtelContext.getId() + ", traceId: " +
+                persistibleOtelContext.startTraceId() + ", spanId: " + persistibleOtelContext.startSpanId());
+    }
+}

@@ -1,9 +1,12 @@
 package io.quarkiverse.flow.opentelemetry.runtime;
 
+import static io.opentelemetry.semconv.ErrorAttributes.ERROR_TYPE;
+
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.opentelemetry.api.trace.StatusCode;
 import io.serverlessworkflow.impl.WorkflowInstanceData;
 import io.serverlessworkflow.impl.WorkflowMutableInstance;
 
@@ -78,6 +81,21 @@ public class WorkflowInstrumentationContext implements AutoCloseable {
                         .reversed())
                 .forEach(entry -> {
                     if (entry.getValue().getStartSpan() != null) {
+                        entry.getValue().getStartSpan().end();
+                    }
+                });
+        workflowInstanceTaskContext.clear();
+    }
+
+    public void failActiveTaskSpans(String statusDescription, String errorType) {
+        workflowInstanceTaskContext.entrySet().stream()
+                .sorted(Comparator
+                        .comparing((Map.Entry<String, InstrumentationContext> entry) -> entry.getValue().getStartTime())
+                        .reversed())
+                .forEach(entry -> {
+                    if (entry.getValue().getStartSpan() != null) {
+                        entry.getValue().getStartSpan().setStatus(StatusCode.ERROR, statusDescription);
+                        entry.getValue().getStartSpan().setAttribute(ERROR_TYPE, errorType);
                         entry.getValue().getStartSpan().end();
                     }
                 });

@@ -16,36 +16,23 @@ import static io.serverlessworkflow.impl.lifecycle.EventType.WORKFLOW_RESUMED;
 import static io.serverlessworkflow.impl.lifecycle.EventType.WORKFLOW_SUSPENDED;
 
 import java.time.Instant;
+import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.SpanBuilder;
-import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.api.trace.*;
 import io.opentelemetry.context.Context;
 import io.quarkiverse.flow.opentelemetry.runtime.config.FlowOTelConfig;
+import io.quarkus.runtime.ShutdownEvent;
 import io.serverlessworkflow.api.types.TaskBase;
 import io.serverlessworkflow.impl.WorkflowPosition;
-import io.serverlessworkflow.impl.lifecycle.TaskCancelledEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskCompletedEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskFailedEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskResumedEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskRetriedEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskStartedEvent;
-import io.serverlessworkflow.impl.lifecycle.TaskSuspendedEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowCancelledEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowCompletedEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowExecutionListener;
-import io.serverlessworkflow.impl.lifecycle.WorkflowFailedEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowResumedEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowStartedEvent;
-import io.serverlessworkflow.impl.lifecycle.WorkflowSuspendedEvent;
+import io.serverlessworkflow.impl.lifecycle.*;
+import io.smallrye.config.Config;
 
 public class OTelWorkflowExecutionListener implements WorkflowExecutionListener {
 
@@ -63,6 +50,10 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
     @Inject
     FlowOTelConfig oTelConfig;
 
+    ConcurrentHashMap<String, Span> workflowRunSpan = new ConcurrentHashMap<>();
+
+    ConcurrentHashMap<String, WorkflowInstrumentationContext> workflowInstrumentationContextRegistry = new ConcurrentHashMap<>();
+
     @Override
     public void onWorkflowStarted(WorkflowStartedEvent ev) {
         if (!oTelConfig.isEnabled()) {
@@ -72,20 +63,35 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
         logWorkflowEvent(eventInfo);
 
         Context parentContext = Context.current();
+        Span startSpan = spanBuilderFactory.tracer.spanBuilder("workflow.start").setParent(parentContext)
+                .setAttribute("flow.workflow.name", eventInfo.wfName()).startSpan();
+
+        // Save the traceId and spanId in the WF data.
+        String traceId = startSpan.getSpanContext().getTraceId(); // 32-hex-character string
+        String spanId = startSpan.getSpanContext().getSpanId(); // 16-hex-character string
+
+        System.out.println("XXX - StartWorkflow workflowInstanceId: + " + eventInfo.wfInstanceId() +
+                ", traceId: " + traceId + ", spanId: " + spanId);
+
         String workflowSpanName = generateWorkflowSpanName(eventInfo.wfName());
 
-        Span startSpan = spanBuilderFactory.newWorkflowSpan(workflowSpanName, eventInfo,
-                parentContext).startSpan();
-        appendWorkflowEvent(startSpan, eventInfo.eventType());
+        Span runSpan = spanBuilderFactory.newWorkflowSpan(workflowSpanName, eventInfo,
+                startSpan.storeInContext(parentContext)).startSpan();
+        startSpan.end();
+        workflowRunSpan.put(eventInfo.wfInstanceId(), runSpan);
+
+        appendWorkflowEvent(runSpan, eventInfo.eventType());
 
         InstrumentationContext workflowInstanceContext = InstrumentationContext.newBuilder()
                 .parentContext(parentContext)
-                .withStartSpan(startSpan)
+                .withStartSpan(runSpan)
                 .withStartTime(Instant.now())
                 .build();
 
-        setWorkflowInstrumentationContext(ev.workflowContext().instanceData(),
-                new WorkflowInstrumentationContext(workflowInstanceContext));
+        WorkflowInstrumentationContext workflowInstrumentationContext = new WorkflowInstrumentationContext(
+                workflowInstanceContext);
+        setWorkflowInstrumentationContext(ev.workflowContext().instanceData(), workflowInstrumentationContext);
+        workflowInstrumentationContextRegistry.put(eventInfo.wfInstanceId(), workflowInstrumentationContext);
     }
 
     @Override
@@ -162,9 +168,56 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
         logTaskEvent(eventInfo);
 
         WorkflowInstrumentationContext workflowContext = getWorkflowInstrumentationContext(ev.workflowContext().instanceData());
+
+        // Ask the persisted model to know if we come from a resumed execution.
         if (workflowContext == null) {
-            warnNoWorkflowContext(eventInfo);
-            return;
+
+            //            PersistibleOtelContext persistedContext = contextRepository.findById(eventInfo.wfInstanceId());
+
+            String workflowInstanceId = Config.get().getOptionalValue("workflowInstanceId", String.class).orElse(null);
+            String traceId = Config.get().getOptionalValue("traceId", String.class).orElse(null);
+            String spanId = Config.get().getOptionalValue("spanId", String.class).orElse(null);
+
+            if (workflowInstanceId == null) {
+                // no persisted context
+                warnNoWorkflowContext(eventInfo);
+                return;
+            } else {
+
+                System.out.println(
+                        "XXX + Creating new workflow run span from existing start traceId: " + traceId + ", spanId: " + spanId);
+                Context parentContext = Context.current();
+                String workflowSpanName = generateWorkflowSpanName(eventInfo.wfName());
+
+                WorkflowEventInfo wfWorkflowEventInfo = new WorkflowEventInfo(eventInfo.wfApplicationId(),
+                        eventInfo.wfNamespace(), eventInfo.wfName(), eventInfo.wfVersion(), eventInfo.wfInstanceId(),
+                        EventType.WORKFLOW_STARTED);
+
+                //TODO, link with the original workflow Starting Span if any.
+                SpanContext startSpanContext = SpanContext.createFromRemoteParent(
+                        traceId,
+                        spanId,
+                        TraceFlags.getSampled(),
+                        TraceState.getDefault());
+
+                // add link here
+                Span runSpan = spanBuilderFactory.newWorkflowSpan(workflowSpanName, wfWorkflowEventInfo,
+                        parentContext, startSpanContext).startSpan();
+
+                workflowRunSpan.put(eventInfo.wfInstanceId(), runSpan);
+
+                appendWorkflowEvent(runSpan, eventInfo.eventType());
+
+                InstrumentationContext workflowInstanceContext = InstrumentationContext.newBuilder()
+                        .parentContext(parentContext)
+                        .withStartSpan(runSpan)
+                        .withStartTime(Instant.now())
+                        .build();
+
+                workflowContext = new WorkflowInstrumentationContext(workflowInstanceContext);
+                setWorkflowInstrumentationContext(ev.workflowContext().instanceData(), workflowContext);
+                workflowInstrumentationContextRegistry.put(eventInfo.wfInstanceId(), workflowContext);
+            }
         }
         InstrumentationContext parentTaskContext = workflowContext.findEnclosingParentContext(eventInfo.taskId());
         Context parentContext = parentTaskContext.getStartSpan().storeInContext(parentTaskContext.getParentContext());
@@ -268,6 +321,27 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
     @Override
     public void close() {
         WorkflowExecutionListener.super.close();
+    }
+
+    private void onShutdown(@Observes ShutdownEvent e) {
+        // Every workflow executing on this JVM (new instance, or a resumed durable instance after restart
+        // has an active workflow run span and several
+        // We must also
+        //        if (!e.isStandardShutdown()) {
+        System.out.println("XXX - System is going down: isStandardShutdown: " + e.isStandardShutdown());
+        // ensure we call end() on all currently open workflow.run tasks.
+
+        workflowRunSpan.forEach((workflowInstanceId, runSpan) -> {
+            LOGGER.debug("Ending workflow run span {} - {} before shutdown.", workflowInstanceId, runSpan);
+            WorkflowInstrumentationContext instrumentationContext = workflowInstrumentationContextRegistry
+                    .get(workflowInstanceId);
+            instrumentationContext.failActiveTaskSpans("Task execution interrupted due to JVM shutdown",
+                    SpanUtils.ERROR_TYPE_RUNTIME_JVM_SHUTDOWN);
+            runSpan.setStatus(StatusCode.ERROR, "Workflow execution interrupted due to JVM shutdown");
+            runSpan.setAttribute("error.type", SpanUtils.ERROR_TYPE_RUNTIME_JVM_SHUTDOWN);
+            runSpan.end();
+        });
+        //        }
     }
 
     private static String containerContextPosition(TaskType taskType, WorkflowPosition position) {
