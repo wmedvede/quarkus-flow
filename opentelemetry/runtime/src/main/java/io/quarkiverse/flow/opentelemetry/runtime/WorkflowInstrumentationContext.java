@@ -1,8 +1,8 @@
 package io.quarkiverse.flow.opentelemetry.runtime;
 
 import static io.opentelemetry.semconv.ErrorAttributes.ERROR_TYPE;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_UNKNOWN;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.FLOW_TASK_EXECUTION_END_REASON_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.END_REASON_UNKNOWN;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_EXECUTION_END_REASON_ATTR;
 
 import java.util.Comparator;
 import java.util.Map;

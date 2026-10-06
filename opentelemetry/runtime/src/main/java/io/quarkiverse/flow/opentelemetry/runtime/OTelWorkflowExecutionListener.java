@@ -1,13 +1,13 @@
 package io.quarkiverse.flow.opentelemetry.runtime;
 
 import static io.opentelemetry.semconv.ErrorAttributes.ERROR_TYPE;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_CANCELLED;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_COMPLETED;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_FAULTED;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_JVM_SHUTDOWN;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_UNKNOWN;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.FLOW_TASK_EXECUTION_END_REASON_ATTR;
-import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.FLOW_WF_EXECUTION_END_REASON_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.END_REASON_CANCELLED;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.END_REASON_COMPLETED;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.END_REASON_FAULTED;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.END_REASON_JVM_SHUTDOWN;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.END_REASON_UNKNOWN;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_EXECUTION_END_REASON_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_EXECUTION_END_REASON_ATTR;
 import static io.quarkiverse.flow.opentelemetry.runtime.SpanUtils.appendTaskEvent;
 import static io.quarkiverse.flow.opentelemetry.runtime.SpanUtils.appendWorkflowEvent;
 import static io.quarkiverse.flow.opentelemetry.runtime.SpanUtils.generateTaskSpanName;
@@ -373,10 +373,10 @@ public class OTelWorkflowExecutionListener implements WorkflowExecutionListener 
             LOGGER.warn("Ending instrumentation context for active workflow run due to JVM shutdown, workflowInstanceId: {}",
                     workflowInstanceId);
             workflowInstrumentationContext.failActiveTaskSpans("Task execution interrupted due to JVM shutdown",
-                    SpanUtils.ERROR_TYPE_RUNTIME_JVM_SHUTDOWN, END_REASON_JVM_SHUTDOWN);
+                    SpanConstants.ERROR_TYPE_RUNTIME_JVM_SHUTDOWN_ATTR, END_REASON_JVM_SHUTDOWN);
             Span startSpan = workflowInstrumentationContext.getWorkflowInstanceContext().getStartSpan();
             startSpan.setStatus(StatusCode.ERROR, "Workflow execution interrupted due to JVM shutdown");
-            startSpan.setAttribute(ERROR_TYPE, SpanUtils.ERROR_TYPE_RUNTIME_JVM_SHUTDOWN);
+            startSpan.setAttribute(ERROR_TYPE, SpanConstants.ERROR_TYPE_RUNTIME_JVM_SHUTDOWN_ATTR);
             startSpan.setAttribute(FLOW_WF_EXECUTION_END_REASON_ATTR, END_REASON_JVM_SHUTDOWN);
             startSpan.end();
         });

@@ -1,5 +1,18 @@
 package io.quarkiverse.flow.opentelemetry.runtime;
 
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_ID_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_ITERATION_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_NAME_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_RETRYING_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_RETRY_ATTEMPT_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_TASK_TYPE_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_APPLICATION_ID_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_EXECUTION_IS_RESUMPTION_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_INSTANCE_ID_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_NAMESPACE_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_NAME_ATTR;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanConstants.FLOW_WF_VERSION_ATTR;
+
 import jakarta.inject.Inject;
 
 import io.opentelemetry.api.trace.SpanBuilder;
@@ -8,28 +21,6 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Context;
 
 public class SpanBuilderFactory {
-
-    static final String FLOW_WF_APPLICATION_ID_ATTR = "flow.application.id";
-    static final String FLOW_WF_INSTANCE_ID_ATTR = "flow.workflow.instance.id";
-    static final String FLOW_WF_NAME_ATTR = "flow.workflow.name";
-    static final String FLOW_WF_NAMESPACE_ATTR = "flow.workflow.namespace";
-    static final String FLOW_WF_VERSION_ATTR = "flow.workflow.version";
-    static final String FLOW_WF_EXECUTION_IS_RESUMPTION_ATTR = "flow.workflow.execution.is_resumption";
-    static final String FLOW_WF_EXECUTION_END_REASON_ATTR = "flow.workflow.execution.end_reason";
-
-    static final String FLOW_TASK_ID_ATTR = "flow.task.id";
-    static final String FLOW_TASK_TYPE_ATTR = "flow.task.type";
-    static final String FLOW_TASK_NAME_ATTR = "flow.task.name";
-    static final String FLOW_TASK_ITERATION_ATTR = "flow.task.iteration";
-    static final String FLOW_TASK_RETRYING_ATTR = "flow.task.retrying";
-    static final String FLOW_TASK_RETRY_ATTEMPT = "flow.task.retry_attempt";
-    static final String FLOW_TASK_EXECUTION_END_REASON_ATTR = "flow.task.execution.end_reason";
-
-    static final String END_REASON_COMPLETED = "completed";
-    static final String END_REASON_CANCELLED = "cancelled";
-    static final String END_REASON_FAULTED = "faulted";
-    static final String END_REASON_UNKNOWN = "unknown";
-    static final String END_REASON_JVM_SHUTDOWN = "jvm_shutdown";
 
     @Inject
     Tracer tracer;
@@ -83,7 +74,7 @@ public class SpanBuilderFactory {
                 .setAttribute(FLOW_TASK_NAME_ATTR, eventInfo.taskName())
                 .setAttribute(FLOW_TASK_ITERATION_ATTR, eventInfo.taskInstanceIteration())
                 .setAttribute(FLOW_TASK_RETRYING_ATTR, eventInfo.taskInstanceRetrying())
-                .setAttribute(FLOW_TASK_RETRY_ATTEMPT, eventInfo.taskInstanceRetryAttempt());
+                .setAttribute(FLOW_TASK_RETRY_ATTEMPT_ATTR, eventInfo.taskInstanceRetryAttempt());
         if (parentContext != null) {
             builder.setParent(parentContext);
         }
