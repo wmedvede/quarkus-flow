@@ -14,6 +14,8 @@ public class SpanBuilderFactory {
     static final String FLOW_WF_NAME_ATTR = "flow.workflow.name";
     static final String FLOW_WF_NAMESPACE_ATTR = "flow.workflow.namespace";
     static final String FLOW_WF_VERSION_ATTR = "flow.workflow.version";
+    static final String FLOW_WF_EXECUTION_IS_RESUMPTION_ATTR = "flow.workflow.execution.is_resumption";
+    static final String FLOW_WF_EXECUTION_END_REASON_ATTR = "flow.workflow.execution.end_reason";
 
     static final String FLOW_TASK_ID_ATTR = "flow.task.id";
     static final String FLOW_TASK_TYPE_ATTR = "flow.task.type";
@@ -21,9 +23,29 @@ public class SpanBuilderFactory {
     static final String FLOW_TASK_ITERATION_ATTR = "flow.task.iteration";
     static final String FLOW_TASK_RETRYING_ATTR = "flow.task.retrying";
     static final String FLOW_TASK_RETRY_ATTEMPT = "flow.task.retry_attempt";
+    static final String FLOW_TASK_EXECUTION_END_REASON_ATTR = "flow.task.execution.end_reason";
+
+    static final String END_REASON_COMPLETED = "completed";
+    static final String END_REASON_CANCELLED = "cancelled";
+    static final String END_REASON_FAULTED = "faulted";
+    static final String END_REASON_UNKNOWN = "unknown";
+    static final String END_REASON_JVM_SHUTDOWN = "jvm_shutdown";
 
     @Inject
     Tracer tracer;
+
+    public SpanBuilder newWorkflowCreateSpan(String workflowName, WorkflowEventInfo eventInfo, Context parentContext,
+            SpanContext... spanContextLink) {
+        return newWorkflowSpan(SpanUtils.generateWorkflowCreateSpanName(workflowName), eventInfo, parentContext,
+                spanContextLink);
+    }
+
+    public SpanBuilder newWorkflowExecuteSpan(String workflowName, WorkflowEventInfo eventInfo, Context parentContext,
+            boolean isResumption, SpanContext... spanContextLink) {
+        return newWorkflowSpan(SpanUtils.generateWorkflowExecuteSpanName(workflowName), eventInfo, parentContext,
+                spanContextLink)
+                .setAttribute(FLOW_WF_EXECUTION_IS_RESUMPTION_ATTR, isResumption);
+    }
 
     public SpanBuilder newWorkflowSpan(String name, WorkflowEventInfo eventInfo, Context parentContext,
             SpanContext... spanContextLink) {

@@ -45,7 +45,8 @@ public class SpanUtils {
     public static final String ERROR_TYPE_RUNTIME_JVM_SHUTDOWN = "flow.runtime.jvm_shutdown";
 
     public static final String CALL_A2A_AGENT_CARD_ENDPOINT_ATTRIBUTE = "flow.task.call.a2a.agent_card.url.full";
-    private static final String WORKFLOW_EXECUTE_ACTION = "workflow.run";
+    private static final String WORKFLOW_CREATE_ACTION = "workflow.create";
+    private static final String WORKFLOW_EXECUTE_ACTION = "workflow.execute";
     private static final String TASK_EXECUTE_ACTION = "task.execute";
 
     private static final String CALL_HTTP_TASK_REQUEST_METHOD_ATTRIBUTE = "flow.task.call.http.request.method";
@@ -124,7 +125,11 @@ public class SpanUtils {
         }
     }
 
-    public static String generateWorkflowSpanName(String workflowName) {
+    public static String generateWorkflowCreateSpanName(String workflowName) {
+        return WORKFLOW_CREATE_ACTION + " " + workflowName;
+    }
+
+    public static String generateWorkflowExecuteSpanName(String workflowName) {
         return WORKFLOW_EXECUTE_ACTION + " " + workflowName;
     }
 

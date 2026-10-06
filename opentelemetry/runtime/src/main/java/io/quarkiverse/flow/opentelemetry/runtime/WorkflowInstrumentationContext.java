@@ -1,15 +1,21 @@
 package io.quarkiverse.flow.opentelemetry.runtime;
 
 import static io.opentelemetry.semconv.ErrorAttributes.ERROR_TYPE;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.END_REASON_UNKNOWN;
+import static io.quarkiverse.flow.opentelemetry.runtime.SpanBuilderFactory.FLOW_TASK_EXECUTION_END_REASON_ATTR;
 
 import java.util.Comparator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
+import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.serverlessworkflow.impl.WorkflowInstanceData;
 import io.serverlessworkflow.impl.WorkflowMutableInstance;
+import io.serverlessworkflow.impl.persistence.metadata.MetaTransient;
 
+@MetaTransient
 public class WorkflowInstrumentationContext implements AutoCloseable {
     private static final String OTEL_CONTEXT = "OTEL_CONTEXT";
     private final InstrumentationContext workflowInstanceContext;
@@ -74,29 +80,34 @@ public class WorkflowInstrumentationContext implements AutoCloseable {
         return parentInstrumentationContext;
     }
 
-    public void ensureAllTaskSpansAreClosed() {
-        workflowInstanceTaskContext.entrySet().stream()
-                .sorted(Comparator
-                        .comparing((Map.Entry<String, InstrumentationContext> entry) -> entry.getValue().getStartTime())
-                        .reversed())
-                .forEach(entry -> {
-                    if (entry.getValue().getStartSpan() != null) {
-                        entry.getValue().getStartSpan().end();
-                    }
-                });
+    public void ensureAllTaskSpansAreClosed(String endReason) {
+        applyOnActiveTaskSpans((activeSpan) -> {
+            activeSpan.setAttribute(FLOW_TASK_EXECUTION_END_REASON_ATTR, endReason);
+            System.out.println("YES, the span is not ended");
+            System.out.println("AFTER setting FLOW_TASK_EXECUTION_END_REASON");
+            activeSpan.end();
+        });
         workflowInstanceTaskContext.clear();
     }
 
-    public void failActiveTaskSpans(String statusDescription, String errorType) {
+    public void failActiveTaskSpans(String statusDescription, String errorType, String endReason) {
+        applyOnActiveTaskSpans((activeSpan) -> {
+            activeSpan.setStatus(StatusCode.ERROR, statusDescription);
+            activeSpan.setAttribute(ERROR_TYPE, errorType);
+            activeSpan.setAttribute(FLOW_TASK_EXECUTION_END_REASON_ATTR, endReason);
+            activeSpan.end();
+        });
+        workflowInstanceTaskContext.clear();
+    }
+
+    private void applyOnActiveTaskSpans(Consumer<Span> consumer) {
         workflowInstanceTaskContext.entrySet().stream()
                 .sorted(Comparator
                         .comparing((Map.Entry<String, InstrumentationContext> entry) -> entry.getValue().getStartTime())
                         .reversed())
                 .forEach(entry -> {
-                    if (entry.getValue().getStartSpan() != null) {
-                        entry.getValue().getStartSpan().setStatus(StatusCode.ERROR, statusDescription);
-                        entry.getValue().getStartSpan().setAttribute(ERROR_TYPE, errorType);
-                        entry.getValue().getStartSpan().end();
+                    if (entry.getValue().getStartSpan() != null && entry.getValue().getStartSpan().isRecording()) {
+                        consumer.accept(entry.getValue().getStartSpan());
                     }
                 });
         workflowInstanceTaskContext.clear();
@@ -104,7 +115,8 @@ public class WorkflowInstrumentationContext implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-        ensureAllTaskSpansAreClosed();
+        System.out.println("Workflow instrumentation context, executing close context!!!!");
+        ensureAllTaskSpansAreClosed(END_REASON_UNKNOWN);
     }
 
     public static void setWorkflowInstrumentationContext(WorkflowInstanceData instanceData,
